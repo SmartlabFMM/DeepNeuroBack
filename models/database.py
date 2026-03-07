@@ -173,3 +173,282 @@ class Database:
         
         conn.close()
         return user is not None
+
+
+    def get_user_by_email(self, email):
+        """Get user information by email"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            'SELECT id, name, email, medical_id, user_type, created_at, last_login FROM users WHERE email = ?',
+            (email.lower(),)
+        )
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            return {
+                'id': user[0],
+                'name': user[1],
+                'email': user[2],
+                'medical_id': user[3],
+                'user_type': user[4],
+                'created_at': user[5],
+                'last_login': user[6]
+            }
+        return None    
+    
+    def save_pending_verification(self, email, name, password, medical_id, verification_code, expiration_time):
+        """Save pending verification data"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            password_hash = self.hash_password(password)
+            
+            # Delete any existing pending verification for this email
+            cursor.execute('DELETE FROM pending_verifications WHERE email = ?', (email.lower(),))
+            
+            cursor.execute(
+                'INSERT INTO pending_verifications (email, name, password_hash, medical_id, verification_code, expiration_time) VALUES (?, ?, ?, ?, ?, ?)',
+                (email.lower(), name, password_hash, medical_id, verification_code, expiration_time)
+            )
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving pending verification: {e}")
+            return False
+    
+    def verify_code(self, email, verification_code):
+        """Verify the provided code against pending verification"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'SELECT id, name, password_hash, medical_id, expiration_time FROM pending_verifications WHERE email = ? AND verification_code = ?',
+                (email.lower(), verification_code)
+            )
+            
+            record = cursor.fetchone()
+            
+            if not record:
+                conn.close()
+                return False, "Invalid verification code"
+            
+            # Check if code has expired
+            expiration_time = datetime.fromisoformat(record[4])
+            if datetime.now() > expiration_time:
+                cursor.execute('DELETE FROM pending_verifications WHERE id = ?', (record[0],))
+                conn.commit()
+                conn.close()
+                return False, "Verification code has expired"
+            
+            # Create the verified user
+            verification_id, name, password_hash, medical_id, _ = record
+            
+            if medical_id.startswith('01'):
+                user_type = 'doctor'
+            elif medical_id.startswith('02'):
+                user_type = 'radiologist'
+            else:
+                user_type = 'unknown'
+            
+            cursor.execute(
+                'INSERT INTO users (name, email, password_hash, medical_id, user_type, email_verified) VALUES (?, ?, ?, ?, ?, ?)',
+                (name, email.lower(), password_hash, medical_id, user_type, 1)
+            )
+            
+            # Delete pending verification
+            cursor.execute('DELETE FROM pending_verifications WHERE id = ?', (verification_id,))
+            
+            conn.commit()
+            conn.close()
+            return True, "Email verified successfully"
+        
+        except sqlite3.IntegrityError:
+            conn.close()
+            return False, "Email already registered"
+        except Exception as e:
+            print(f"Error verifying code: {e}")
+            conn.close()
+            return False, "An error occurred during verification"
+    
+    def increment_verification_attempts(self, email):
+        """Increment verification attempts for security tracking"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'UPDATE pending_verifications SET attempts = attempts + 1 WHERE email = ?',
+                (email.lower(),)
+            )
+            
+            cursor.execute(
+                'SELECT attempts FROM pending_verifications WHERE email = ?',
+                (email.lower(),)
+            )
+            
+            result = cursor.fetchone()
+            conn.commit()
+            conn.close()
+            
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error incrementing attempts: {e}")
+            return 0
+    
+    def get_pending_verification(self, email):
+        """Get pending verification data"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'SELECT email, name, verification_code, expiration_time, attempts FROM pending_verifications WHERE email = ?',
+                (email.lower(),)
+            )
+            
+            record = cursor.fetchone()
+            conn.close()
+            
+            if record:
+                return {
+                    'email': record[0],
+                    'name': record[1],
+                    'code': record[2],
+                    'expiration_time': record[3],
+                    'attempts': record[4]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting pending verification: {e}")
+            return None
+
+    def save_password_reset(self, email, verification_code, expiration_time):
+        """Save password reset request"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute('DELETE FROM password_resets WHERE email = ?', (email.lower(),))
+
+            cursor.execute(
+                'INSERT INTO password_resets (email, verification_code, expiration_time) VALUES (?, ?, ?)',
+                (email.lower(), verification_code, expiration_time)
+            )
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving password reset: {e}")
+            return False
+
+    def get_password_reset(self, email):
+        """Get password reset data"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                'SELECT email, verification_code, expiration_time, attempts FROM password_resets WHERE email = ?',
+                (email.lower(),)
+            )
+
+            record = cursor.fetchone()
+            conn.close()
+
+            if record:
+                return {
+                    'email': record[0],
+                    'code': record[1],
+                    'expiration_time': record[2],
+                    'attempts': record[3]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting password reset: {e}")
+            return None
+
+    def increment_password_reset_attempts(self, email):
+        """Increment password reset attempts for security tracking"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                'UPDATE password_resets SET attempts = attempts + 1 WHERE email = ?',
+                (email.lower(),)
+            )
+
+            cursor.execute(
+                'SELECT attempts FROM password_resets WHERE email = ?',
+                (email.lower(),)
+            )
+
+            result = cursor.fetchone()
+            conn.commit()
+            conn.close()
+
+            return result[0] if result else 0
+        except Exception as e:
+            print(f"Error incrementing reset attempts: {e}")
+            return 0
+
+    def verify_password_reset_code(self, email, verification_code):
+        """Verify password reset code"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                'SELECT id, expiration_time FROM password_resets WHERE email = ? AND verification_code = ?',
+                (email.lower(), verification_code)
+            )
+
+            record = cursor.fetchone()
+
+            if not record:
+                conn.close()
+                return False, "Invalid verification code"
+
+            expiration_time = datetime.fromisoformat(record[1])
+            if datetime.now() > expiration_time:
+                cursor.execute('DELETE FROM password_resets WHERE id = ?', (record[0],))
+                conn.commit()
+                conn.close()
+                return False, "Verification code has expired"
+
+            conn.close()
+            return True, "Code verified"
+
+        except Exception as e:
+            print(f"Error verifying reset code: {e}")
+            return False, "An error occurred during verification"
+
+    def update_password(self, email, new_password):
+        """Update user password"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            new_hash = self.hash_password(new_password)
+            cursor.execute(
+                'UPDATE users SET password_hash = ? WHERE email = ?',
+                (new_hash, email.lower())
+            )
+
+            cursor.execute('DELETE FROM password_resets WHERE email = ?', (email.lower(),))
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error updating password: {e}")
+            return False
