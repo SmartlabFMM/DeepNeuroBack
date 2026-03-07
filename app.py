@@ -27,8 +27,10 @@ def create_app(config_name=None):
     
     # Register blueprints
     from routes import auth_bp
+    from routes import diagnosis_bp
     
     app.register_blueprint(auth_bp)
+    app.register_blueprint(diagnosis_bp)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -47,7 +49,8 @@ def create_app(config_name=None):
             'version': '1.0.0',
             'endpoints': {
                 'auth': '/api/auth',
-                'health': '/api/health'
+                'health': '/api/health',
+                'diagnosis': '/api/diagnosis'
             }
         }), 200
     

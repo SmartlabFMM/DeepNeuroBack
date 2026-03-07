@@ -452,3 +452,207 @@ class Database:
         except Exception as e:
             print(f"Error updating password: {e}")
             return False
+        
+        
+    def save_diagnosis_request(self, case_id, doctor_email, doctor_name, patient_name, 
+                               patient_id, patient_age, patient_gender, diagnosis_type, 
+                               scan_date, priority, radiologist_email, description):
+        """Save a diagnosis request"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO diagnosis_requests 
+                (case_id, doctor_email, doctor_name, patient_name, patient_id, patient_age, 
+                 patient_gender, diagnosis_type, scan_date, priority, radiologist_email, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (case_id, doctor_email.lower(), doctor_name, patient_name, patient_id, 
+                  patient_age, patient_gender, diagnosis_type, scan_date, priority, 
+                  radiologist_email.lower(), description))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving diagnosis request: {e}")
+            return False
+    
+    def get_requests_by_doctor(self, doctor_email):
+        """Get all requests submitted by a specific doctor"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, case_id, patient_name, patient_id, diagnosis_type, 
+                       radiologist_email, priority, status, created_at, doctor_read,
+                       patient_age, patient_gender, scan_date, description
+                FROM diagnosis_requests
+                WHERE doctor_email = ?
+                ORDER BY created_at DESC
+            ''', (doctor_email.lower(),))
+            
+            requests = cursor.fetchall()
+            conn.close()
+            
+            return [{
+                'id': r[0],
+                'case_id': r[1],
+                'patient_name': r[2],
+                'patient_id': r[3],
+                'diagnosis_type': r[4],
+                'radiologist_email': r[5],
+                'priority': r[6],
+                'status': r[7],
+                'created_at': r[8],
+                'is_read': r[9],  # For backwards compatibility
+                'patient_age': r[10],
+                'patient_gender': r[11],
+                'scan_date': r[12],
+                'description': r[13]
+            } for r in requests]
+        except Exception as e:
+            print(f"Error retrieving requests: {e}")
+            return []
+    
+    def get_all_radiologists(self):
+        """Get all radiologists with verified emails"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT name, email
+                FROM users
+                WHERE user_type = 'radiologist' AND email_verified = 1
+                ORDER BY name ASC
+            ''')
+            
+            radiologists = cursor.fetchall()
+            conn.close()
+            
+            return [{'name': r[0], 'email': r[1]} for r in radiologists]
+        except Exception as e:
+            print(f"Error retrieving radiologists: {e}")
+            return []
+    
+    def get_requests_by_radiologist(self, radiologist_email):
+        """Get all requests sent to a specific radiologist"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, case_id, patient_name, patient_id, diagnosis_type, 
+                       doctor_name, doctor_email, priority, status, created_at, radiologist_read,
+                       patient_age, patient_gender, scan_date, description
+                FROM diagnosis_requests
+                WHERE radiologist_email = ?
+                ORDER BY created_at DESC
+            ''', (radiologist_email.lower(),))
+            
+            requests = cursor.fetchall()
+            conn.close()
+            
+            return [{
+                'id': r[0],
+                'case_id': r[1],
+                'patient_name': r[2],
+                'patient_id': r[3],
+                'diagnosis_type': r[4],
+                'doctor_name': r[5],
+                'doctor_email': r[6],
+                'priority': r[7],
+                'status': r[8],
+                'created_at': r[9],
+                'is_read': r[10],  # For backwards compatibility
+                'patient_age': r[11],
+                'patient_gender': r[12],
+                'scan_date': r[13],
+                'description': r[14]
+            } for r in requests]
+        except Exception as e:
+            print(f"Error retrieving requests for radiologist: {e}")
+            return []
+    
+    def get_previous_cases_by_doctor(self, doctor_email):
+        """Get all previous cases with patient information for autocomplete"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT DISTINCT case_id, patient_name, patient_id, patient_age, patient_gender
+                FROM diagnosis_requests
+                WHERE doctor_email = ?
+                ORDER BY created_at DESC
+            ''', (doctor_email.lower(),))
+            
+            cases = cursor.fetchall()
+            conn.close()
+            
+            return [{
+                'case_id': c[0],
+                'patient_name': c[1],
+                'patient_id': c[2],
+                'patient_age': c[3],
+                'patient_gender': c[4]
+            } for c in cases]
+        except Exception as e:
+            print(f"Error retrieving previous cases: {e}")
+            return []
+    
+    def mark_request_as_read(self, request_id):
+        """Mark a request as read (legacy method for backwards compatibility)"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'UPDATE diagnosis_requests SET is_read = 1 WHERE id = ?',
+                (request_id,)
+            )
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error marking request as read: {e}")
+            return False
+    
+    def mark_request_as_read_by_doctor(self, request_id):
+        """Mark a request as read by the doctor who sent it"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'UPDATE diagnosis_requests SET doctor_read = 1 WHERE id = ?',
+                (request_id,)
+            )
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error marking request as read by doctor: {e}")
+            return False
+    
+    def mark_request_as_read_by_radiologist(self, request_id):
+        """Mark a request as read by the radiologist who received it"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'UPDATE diagnosis_requests SET radiologist_read = 1 WHERE id = ?',
+                (request_id,)
+            )
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error marking request as read by radiologist: {e}")
+            return False
