@@ -42,3 +42,100 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+## Environment Variables
+
+Create `Backend/.env`:
+
+```env
+# Flask
+FLASK_ENV=development
+DEBUG=True
+SECRET_KEY=change-this-secret
+CORS_ORIGINS=*
+DATABASE_PATH=medical_ai.db
+
+# Email (required)
+EMAIL_SENDER=your-email@gmail.com
+EMAIL_APP_PASSWORD=your-16-char-app-password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+```
+
+Notes:
+- `EMAIL_SENDER` and `EMAIL_APP_PASSWORD` are mandatory; app startup fails without them.
+- `CORS_ORIGINS` accepts comma-separated values.
+- `DATABASE_PATH` defaults to `../medical_ai.db` if not set in `.env`.
+
+## Run the Backend
+
+```bash
+cd Backend
+python app.py
+```
+
+Default server:
+
+- URL: `http://localhost:5000`
+- Health: `GET /api/health`
+
+## API Overview
+
+### Base Endpoints
+
+- `GET /` - API info
+- `GET /api/health` - service health
+
+### Auth Routes (`/api/auth`)
+
+- `POST /register`
+- `POST /verify-email`
+- `POST /login`
+- `POST /request-password-reset`
+- `POST /verify-reset-code`
+- `POST /reset-password`
+- `GET /user/<email>`
+
+### Diagnosis Routes (`/api/diagnosis`)
+
+- `POST /submit`
+- `GET /doctor/<doctor_email>`
+- `GET /radiologist/<radiologist_email>`
+- `GET /radiologists`
+- `GET /previous-cases/<doctor_email>`
+- `PUT /mark-read/doctor/<request_id>`
+- `PUT /mark-read/radiologist/<request_id>`
+
+## Data and Behavior Notes
+
+- SQLite tables are auto-created on startup in `models/database.py`.
+- User type is derived from `medical_id` prefix:
+  - `01` -> doctor
+  - `02` -> radiologist
+  - otherwise -> unknown
+- Passwords are hashed with SHA-256 before storage.
+
+## Quick Test
+
+```bash
+curl http://localhost:5000/api/health
+```
+
+Expected response includes:
+
+```json
+{
+  "status": "healthy",
+  "service": "DeepNeuro Backend",
+  "version": "1.0.0"
+}
+```
+
+## Troubleshooting
+
+- App crashes on startup with email error:
+  - Ensure `.env` exists in `Backend/` and both `EMAIL_SENDER` and `EMAIL_APP_PASSWORD` are set.
+- Port 5000 already in use:
+  - Stop the conflicting process or run app with a different port in `app.py`.
+- Frontend cannot connect:
+  - Confirm backend is running and `GET /api/health` works.
