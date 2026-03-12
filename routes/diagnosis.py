@@ -128,6 +128,65 @@ def get_previous_cases(doctor_email):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
+@diagnosis_bp.route('/patients/add', methods=['POST'])
+def add_patient():
+    """Add a patient profile for a doctor"""
+    try:
+        data = request.get_json()
+
+        required_fields = [
+            'doctor_email', 'patient_name', 'patient_age', 'patient_sex',
+            'patient_id', 'patient_email', 'phone_number', 'has_conditions', 'conditions_notes'
+        ]
+
+        if not all(field in data for field in required_fields):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        doctor_email = data['doctor_email'].strip().lower()
+        user = db.get_user_by_email(doctor_email)
+        if not user or user['user_type'] != 'doctor':
+            return jsonify({'success': False, 'message': 'Invalid doctor'}), 400
+
+        success, message = db.save_patient(
+            doctor_email=doctor_email,
+            patient_name=data['patient_name'].strip(),
+            patient_age=int(data['patient_age']),
+            patient_sex=data['patient_sex'].strip(),
+            patient_id=data['patient_id'].strip(),
+            patient_email=data['patient_email'].strip().lower(),
+            phone_number=data['phone_number'].strip(),
+            has_conditions=bool(data['has_conditions']),
+            conditions_notes=data['conditions_notes'].strip()
+        )
+
+        if not success:
+            return jsonify({'success': False, 'message': message}), 400
+
+        return jsonify({'success': True, 'message': message}), 201
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@diagnosis_bp.route('/patients/doctor/<doctor_email>', methods=['GET'])
+def get_doctor_patients(doctor_email):
+    """Get all patients added by a doctor"""
+    try:
+        doctor_email = doctor_email.strip().lower()
+
+        user = db.get_user_by_email(doctor_email)
+        if not user or user['user_type'] != 'doctor':
+            return jsonify({'success': False, 'message': 'Invalid doctor'}), 400
+
+        patients = db.get_patients_by_doctor(doctor_email)
+
+        return jsonify({
+            'success': True,
+            'patients': patients
+        }), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
 @diagnosis_bp.route('/mark-read/doctor/<int:request_id>', methods=['PUT'])
 def mark_read_doctor(request_id):
     """Mark request as read by doctor"""

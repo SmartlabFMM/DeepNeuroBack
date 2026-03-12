@@ -74,6 +74,24 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # Create patients table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doctor_email TEXT NOT NULL,
+                patient_name TEXT NOT NULL,
+                patient_age INTEGER NOT NULL,
+                patient_sex TEXT NOT NULL,
+                patient_id TEXT NOT NULL,
+                patient_email TEXT NOT NULL,
+                phone_number TEXT NOT NULL,
+                has_conditions INTEGER DEFAULT 0,
+                conditions_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(doctor_email, patient_id)
+            )
+        ''')
         
         # Check and add missing columns for existing tables
         self.migrate_database(cursor)
@@ -113,6 +131,12 @@ class Database:
                 cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN doctor_read INTEGER DEFAULT 0')
             if 'radiologist_read' not in diag_columns:
                 cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN radiologist_read INTEGER DEFAULT 0')
+
+            # Check patients table
+            cursor.execute("PRAGMA table_info(patients)")
+            patient_columns = [column[1] for column in cursor.fetchall()]
+            if 'patient_email' not in patient_columns:
+                cursor.execute('ALTER TABLE patients ADD COLUMN patient_email TEXT DEFAULT ""')
         except sqlite3.OperationalError:
             # Table doesn't exist yet, will be created by CREATE TABLE IF NOT EXISTS
             pass
@@ -477,6 +501,72 @@ class Database:
         except Exception as e:
             print(f"Error saving diagnosis request: {e}")
             return False
+
+    def save_patient(self, doctor_email, patient_name, patient_age, patient_sex,
+                     patient_id, patient_email, phone_number, has_conditions=False, conditions_notes=""):
+        """Save a patient profile for a doctor"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO patients
+                (doctor_email, patient_name, patient_age, patient_sex, patient_id,
+                 patient_email, phone_number, has_conditions, conditions_notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                doctor_email.lower(),
+                patient_name,
+                int(patient_age),
+                patient_sex,
+                patient_id,
+                patient_email.lower(),
+                phone_number,
+                1 if has_conditions else 0,
+                conditions_notes
+            ))
+
+            conn.commit()
+            conn.close()
+            return True, "Patient added successfully"
+        except sqlite3.IntegrityError:
+            return False, "Patient ID already exists for this doctor"
+        except Exception as e:
+            print(f"Error saving patient: {e}")
+            return False, "Failed to save patient"
+
+    def get_patients_by_doctor(self, doctor_email):
+        """Get all patients added by a specific doctor"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                  SELECT id, patient_name, patient_age, patient_sex, patient_id,
+                      patient_email, phone_number, has_conditions, conditions_notes, created_at
+                FROM patients
+                WHERE doctor_email = ?
+                ORDER BY created_at DESC
+            ''', (doctor_email.lower(),))
+
+            patients = cursor.fetchall()
+            conn.close()
+
+            return [{
+                'id': p[0],
+                'patient_name': p[1],
+                'patient_age': p[2],
+                'patient_sex': p[3],
+                'patient_id': p[4],
+                'patient_email': p[5],
+                'phone_number': p[6],
+                'has_conditions': bool(p[7]),
+                'conditions_notes': p[8] or "",
+                'created_at': p[9]
+            } for p in patients]
+        except Exception as e:
+            print(f"Error retrieving patients: {e}")
+            return []
     
     def get_requests_by_doctor(self, doctor_email):
         """Get all requests submitted by a specific doctor"""
