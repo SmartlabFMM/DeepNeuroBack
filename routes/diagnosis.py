@@ -17,7 +17,7 @@ def submit_diagnosis_request():
     try:
         data = request.get_json()
         
-        required_fields = ['case_id', 'doctor_email', 'doctor_name', 'patient_name', 
+        required_fields = ['doctor_email', 'doctor_name', 'patient_name', 
                           'patient_id', 'patient_age', 'patient_gender', 'diagnosis_type',
                           'scan_date', 'priority', 'radiologist_email', 'description']
         
@@ -31,7 +31,6 @@ def submit_diagnosis_request():
         
         # Save diagnosis request
         success = db.save_diagnosis_request(
-            case_id=data['case_id'],
             doctor_email=data['doctor_email'],
             doctor_name=data['doctor_name'],
             patient_name=data['patient_name'],

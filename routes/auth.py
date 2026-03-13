@@ -28,6 +28,12 @@ def register():
         # Validation
         if not all([name, email, password, medical_id]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        if not (medical_id.startswith('01') or medical_id.startswith('02')):
+            return jsonify({
+                'success': False,
+                'message': 'Medical ID must start with 01 (Doctor) or 02 (Radiologist)'
+            }), 400
         
         if len(password) < 6:
             return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400

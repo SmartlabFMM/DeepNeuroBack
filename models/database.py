@@ -57,7 +57,6 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS diagnosis_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                case_id TEXT NOT NULL,
                 doctor_email TEXT NOT NULL,
                 doctor_name TEXT NOT NULL,
                 patient_name TEXT NOT NULL,
@@ -132,6 +131,47 @@ class Database:
             if 'radiologist_read' not in diag_columns:
                 cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN radiologist_read INTEGER DEFAULT 0')
 
+            # Drop legacy case_id column by rebuilding the table if it exists.
+            if 'case_id' in diag_columns:
+                cursor.execute('''
+                    CREATE TABLE diagnosis_requests_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        doctor_email TEXT NOT NULL,
+                        doctor_name TEXT NOT NULL,
+                        patient_name TEXT NOT NULL,
+                        patient_id TEXT NOT NULL,
+                        patient_age INTEGER NOT NULL,
+                        patient_gender TEXT NOT NULL,
+                        diagnosis_type TEXT NOT NULL,
+                        scan_date TEXT NOT NULL,
+                        priority TEXT NOT NULL,
+                        radiologist_email TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        status TEXT DEFAULT 'Pending',
+                        is_read INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        doctor_read INTEGER DEFAULT 0,
+                        radiologist_read INTEGER DEFAULT 0
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO diagnosis_requests_new (
+                        id, doctor_email, doctor_name, patient_name, patient_id,
+                        patient_age, patient_gender, diagnosis_type, scan_date,
+                        priority, radiologist_email, description, status,
+                        is_read, created_at, doctor_read, radiologist_read
+                    )
+                    SELECT
+                        id, doctor_email, doctor_name, patient_name, patient_id,
+                        patient_age, patient_gender, diagnosis_type, scan_date,
+                        priority, radiologist_email, description, status,
+                        COALESCE(is_read, 0), created_at,
+                        COALESCE(doctor_read, 0), COALESCE(radiologist_read, 0)
+                    FROM diagnosis_requests
+                ''')
+                cursor.execute('DROP TABLE diagnosis_requests')
+                cursor.execute('ALTER TABLE diagnosis_requests_new RENAME TO diagnosis_requests')
+
             # Check patients table
             cursor.execute("PRAGMA table_info(patients)")
             patient_columns = [column[1] for column in cursor.fetchall()]
@@ -144,10 +184,18 @@ class Database:
     def hash_password(self, password):
         """Hash password using SHA-256"""
         return hashlib.sha256(password.encode()).hexdigest()
+
+    @staticmethod
+    def is_valid_medical_id(medical_id):
+        """Return True only for medical IDs that start with doctor/radiologist prefixes."""
+        return isinstance(medical_id, str) and (medical_id.startswith('01') or medical_id.startswith('02'))
     
     def create_user(self, name, email, password, medical_id):
         """Create a new user account"""
         try:
+            if not self.is_valid_medical_id(medical_id):
+                return False
+
             # Determine user type from medical ID
             if medical_id.startswith('01'):
                 user_type = 'doctor'
@@ -227,6 +275,9 @@ class Database:
     def save_pending_verification(self, email, name, password, medical_id, verification_code, expiration_time):
         """Save pending verification data"""
         try:
+            if not self.is_valid_medical_id(medical_id):
+                return False
+
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
             
@@ -274,6 +325,12 @@ class Database:
             
             # Create the verified user
             verification_id, name, password_hash, medical_id, _ = record
+
+            if not self.is_valid_medical_id(medical_id):
+                cursor.execute('DELETE FROM pending_verifications WHERE id = ?', (verification_id,))
+                conn.commit()
+                conn.close()
+                return False, "Invalid medical ID. It must start with 01 or 02"
             
             if medical_id.startswith('01'):
                 user_type = 'doctor'
@@ -478,7 +535,7 @@ class Database:
             return False
         
         
-    def save_diagnosis_request(self, case_id, doctor_email, doctor_name, patient_name, 
+    def save_diagnosis_request(self, doctor_email, doctor_name, patient_name,
                                patient_id, patient_age, patient_gender, diagnosis_type, 
                                scan_date, priority, radiologist_email, description):
         """Save a diagnosis request"""
@@ -488,10 +545,10 @@ class Database:
             
             cursor.execute('''
                 INSERT INTO diagnosis_requests 
-                (case_id, doctor_email, doctor_name, patient_name, patient_id, patient_age, 
+                (doctor_email, doctor_name, patient_name, patient_id, patient_age, 
                  patient_gender, diagnosis_type, scan_date, priority, radiologist_email, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (case_id, doctor_email.lower(), doctor_name, patient_name, patient_id, 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (doctor_email.lower(), doctor_name, patient_name, patient_id,
                   patient_age, patient_gender, diagnosis_type, scan_date, priority, 
                   radiologist_email.lower(), description))
             
@@ -575,7 +632,7 @@ class Database:
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT id, case_id, patient_name, patient_id, diagnosis_type, 
+                SELECT id, patient_name, patient_id, diagnosis_type,
                        radiologist_email, priority, status, created_at, doctor_read,
                        patient_age, patient_gender, scan_date, description
                 FROM diagnosis_requests
@@ -588,19 +645,18 @@ class Database:
             
             return [{
                 'id': r[0],
-                'case_id': r[1],
-                'patient_name': r[2],
-                'patient_id': r[3],
-                'diagnosis_type': r[4],
-                'radiologist_email': r[5],
-                'priority': r[6],
-                'status': r[7],
-                'created_at': r[8],
-                'is_read': r[9],  # For backwards compatibility
-                'patient_age': r[10],
-                'patient_gender': r[11],
-                'scan_date': r[12],
-                'description': r[13]
+                'patient_name': r[1],
+                'patient_id': r[2],
+                'diagnosis_type': r[3],
+                'radiologist_email': r[4],
+                'priority': r[5],
+                'status': r[6],
+                'created_at': r[7],
+                'is_read': r[8],  # For backwards compatibility
+                'patient_age': r[9],
+                'patient_gender': r[10],
+                'scan_date': r[11],
+                'description': r[12]
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests: {e}")
@@ -634,7 +690,7 @@ class Database:
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT id, case_id, patient_name, patient_id, diagnosis_type, 
+                SELECT id, patient_name, patient_id, diagnosis_type,
                        doctor_name, doctor_email, priority, status, created_at, radiologist_read,
                        patient_age, patient_gender, scan_date, description
                 FROM diagnosis_requests
@@ -647,20 +703,19 @@ class Database:
             
             return [{
                 'id': r[0],
-                'case_id': r[1],
-                'patient_name': r[2],
-                'patient_id': r[3],
-                'diagnosis_type': r[4],
-                'doctor_name': r[5],
-                'doctor_email': r[6],
-                'priority': r[7],
-                'status': r[8],
-                'created_at': r[9],
-                'is_read': r[10],  # For backwards compatibility
-                'patient_age': r[11],
-                'patient_gender': r[12],
-                'scan_date': r[13],
-                'description': r[14]
+                'patient_name': r[1],
+                'patient_id': r[2],
+                'diagnosis_type': r[3],
+                'doctor_name': r[4],
+                'doctor_email': r[5],
+                'priority': r[6],
+                'status': r[7],
+                'created_at': r[8],
+                'is_read': r[9],  # For backwards compatibility
+                'patient_age': r[10],
+                'patient_gender': r[11],
+                'scan_date': r[12],
+                'description': r[13]
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests for radiologist: {e}")
@@ -673,7 +728,7 @@ class Database:
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT DISTINCT case_id, patient_name, patient_id, patient_age, patient_gender
+                SELECT DISTINCT patient_id, patient_name, patient_age, patient_gender
                 FROM diagnosis_requests
                 WHERE doctor_email = ?
                 ORDER BY created_at DESC
@@ -683,11 +738,10 @@ class Database:
             conn.close()
             
             return [{
-                'case_id': c[0],
+                'patient_id': c[0],
                 'patient_name': c[1],
-                'patient_id': c[2],
-                'patient_age': c[3],
-                'patient_gender': c[4]
+                'patient_age': c[2],
+                'patient_gender': c[3]
             } for c in cases]
         except Exception as e:
             print(f"Error retrieving previous cases: {e}")
