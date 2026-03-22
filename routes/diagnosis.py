@@ -6,10 +6,16 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.database import Database
+from services.email_service import EmailService
 
 diagnosis_bp = Blueprint('diagnosis', __name__, url_prefix='/api/diagnosis')
 
 db = Database()
+try:
+    email_service = EmailService()
+except Exception as e:
+    print(f"Warning: Email service unavailable in diagnosis routes: {e}")
+    email_service = None
 
 @diagnosis_bp.route('/submit', methods=['POST'])
 def submit_diagnosis_request():
@@ -46,10 +52,35 @@ def submit_diagnosis_request():
         
         if not success:
             return jsonify({'success': False, 'message': 'Failed to submit request'}), 500
+
+        email_sent = False
+        if email_service:
+            email_sent = email_service.send_new_case_notification_email(
+                recipient_email=data['radiologist_email'].lower(),
+                request_info={
+                    'doctor_name': data['doctor_name'],
+                    'doctor_email': data['doctor_email'].lower(),
+                    'patient_name': data['patient_name'],
+                    'patient_id': data['patient_id'],
+                    'patient_age': data['patient_age'],
+                    'patient_gender': data['patient_gender'],
+                    'diagnosis_type': data['diagnosis_type'],
+                    'priority': data['priority'],
+                    'scan_date': data['scan_date'],
+                    'description': data['description']
+                }
+            )
         
+        if email_sent:
+            return jsonify({
+                'success': True,
+                'message': 'Diagnosis request submitted and notification email sent to radiologist'
+            }), 201
+
         return jsonify({
             'success': True,
-            'message': 'Diagnosis request submitted successfully'
+            'message': 'Diagnosis request submitted successfully (email notification could not be sent)',
+            'email_notification_sent': False
         }), 201
         
     except Exception as e:

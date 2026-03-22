@@ -200,6 +200,140 @@ If you did not request this reset, please ignore this email.
         except Exception as e:
             print(f"Error sending reset email: {e}")
             return False
+
+    def send_new_case_notification_email(self, recipient_email, request_info):
+        """
+        Send a new diagnosis request notification to the radiologist.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            subject = "DeepNeuro - New Diagnosis Request Assigned"
+
+            doctor_name = request_info.get('doctor_name', 'Unknown Doctor')
+            doctor_email = request_info.get('doctor_email', 'N/A')
+            patient_name = request_info.get('patient_name', 'N/A')
+            patient_id = request_info.get('patient_id', 'N/A')
+            patient_age = request_info.get('patient_age', 'N/A')
+            patient_gender = request_info.get('patient_gender', 'N/A')
+            diagnosis_type = request_info.get('diagnosis_type', 'N/A')
+            priority = request_info.get('priority', 'N/A')
+            description = request_info.get('description', 'N/A')
+
+            body = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
+                    <div style="max-width: 620px; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden;">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center;">
+                            <h2 style="margin: 0; font-size: 26px;">DeepNeuro</h2>
+                            <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">New diagnosis request assigned to you</p>
+                        </div>
+
+                        <div style="padding: 30px; color: #1f2937;">
+                            <p style="margin-top: 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                You have received a new diagnosis request from Dr. <strong>{doctor_name}</strong>.
+                            </p>
+
+                            <h3 style="font-size: 15px; color: #667eea; margin: 18px 0 10px 0;">Doctor Information</h3>
+                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 180px; color: #374151;">Doctor Name</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{doctor_name}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Doctor Email</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{doctor_email}</td>
+                                </tr>
+                            </table>
+
+                            <h3 style="font-size: 15px; color: #667eea; margin: 18px 0 10px 0;">Request Information</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 180px; color: #374151;">Patient Name</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_name}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient ID</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_id}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient Age</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_age}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient Gender</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_gender}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Diagnosis Type</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{diagnosis_type}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Priority</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{priority}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151; vertical-align: top;">Description</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{description}</td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 18px 0 0 0; font-size: 13px; color: #666;">
+                                Please log in to DeepNeuro to review and process this request.
+                            </p>
+                        </div>
+
+                        <div style="background-color: #f5f5f5; border-top: 1px solid #e0e0e0; padding: 20px; text-align: center;">
+                            <p style="color: #999; font-size: 12px; margin: 0;">
+                                © 2026 DeepNeuro. All rights reserved.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+            </html>
+            """
+
+            text_body = f"""
+DeepNeuro - New Diagnosis Request Assigned
+
+You have received a new diagnosis request.
+
+Doctor Information:
+- Name: {doctor_name}
+- Email: {doctor_email}
+
+Request Information:
+- Patient Name: {patient_name}
+- Patient ID: {patient_id}
+- Patient Age: {patient_age}
+- Patient Gender: {patient_gender}
+- Diagnosis Type: {diagnosis_type}
+- Priority: {priority}
+- Description: {description}
+
+Please log in to DeepNeuro to review and process this request.
+            """
+
+            message = MIMEMultipart("alternative")
+            message["Subject"] = subject
+            message["From"] = self.sender_email
+            message["To"] = recipient_email
+
+            part1 = MIMEText(text_body, "plain")
+            part2 = MIMEText(body, "html")
+
+            message.attach(part1)
+            message.attach(part2)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.sender_email, self.app_password)
+                server.sendmail(self.sender_email, recipient_email, message.as_string())
+
+            return True
+
+        except Exception as e:
+            print(f"Error sending new case notification email: {e}")
+            return False
     
     def get_expiration_time(self, minutes=15):
         """Get expiration time for verification code"""
