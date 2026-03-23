@@ -24,7 +24,8 @@ def submit_diagnosis_request():
         data = request.get_json()
         
         required_fields = ['doctor_email', 'doctor_name', 'patient_name', 
-                          'patient_id', 'patient_age', 'patient_gender', 'diagnosis_type',
+                  'patient_id', 'patient_age', 'patient_gender',
+                  'diagnosis_type',
                           'scan_date', 'priority', 'radiologist_email', 'description']
         
         if not all(field in data for field in required_fields):
@@ -43,6 +44,8 @@ def submit_diagnosis_request():
             patient_id=data['patient_id'],
             patient_age=int(data['patient_age']),
             patient_gender=data['patient_gender'],
+            patient_email=str(data.get('patient_email', '')).strip().lower(),
+            phone_number=str(data.get('phone_number', '')).strip(),
             diagnosis_type=data['diagnosis_type'],
             scan_date=data['scan_date'],
             priority=data['priority'],
@@ -64,6 +67,8 @@ def submit_diagnosis_request():
                     'patient_id': data['patient_id'],
                     'patient_age': data['patient_age'],
                     'patient_gender': data['patient_gender'],
+                    'patient_email': str(data.get('patient_email', '')).strip().lower(),
+                    'phone_number': str(data.get('phone_number', '')).strip(),
                     'diagnosis_type': data['diagnosis_type'],
                     'priority': data['priority'],
                     'scan_date': data['scan_date'],

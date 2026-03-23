@@ -215,6 +215,8 @@ If you did not request this reset, please ignore this email.
             patient_id = request_info.get('patient_id', 'N/A')
             patient_age = request_info.get('patient_age', 'N/A')
             patient_gender = request_info.get('patient_gender', 'N/A')
+            patient_email = request_info.get('patient_email', 'N/A')
+            phone_number = request_info.get('phone_number', 'N/A')
             diagnosis_type = request_info.get('diagnosis_type', 'N/A')
             priority = request_info.get('priority', 'N/A')
             description = request_info.get('description', 'N/A')
@@ -264,6 +266,14 @@ If you did not request this reset, please ignore this email.
                                     <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_gender}</td>
                                 </tr>
                                 <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient Email</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_email}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Phone Number</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{phone_number}</td>
+                                </tr>
+                                <tr>
                                     <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Diagnosis Type</td>
                                     <td style="padding: 8px; border: 1px solid #e5e7eb;">{diagnosis_type}</td>
                                 </tr>
@@ -306,6 +316,8 @@ Request Information:
 - Patient ID: {patient_id}
 - Patient Age: {patient_age}
 - Patient Gender: {patient_gender}
+- Patient Email: {patient_email}
+- Phone Number: {phone_number}
 - Diagnosis Type: {diagnosis_type}
 - Priority: {priority}
 - Description: {description}

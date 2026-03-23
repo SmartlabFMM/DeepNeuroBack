@@ -63,6 +63,8 @@ class Database:
                 patient_id TEXT NOT NULL,
                 patient_age INTEGER NOT NULL,
                 patient_gender TEXT NOT NULL,
+                patient_email TEXT,
+                phone_number TEXT,
                 diagnosis_type TEXT NOT NULL,
                 scan_date TEXT NOT NULL,
                 priority TEXT NOT NULL,
@@ -131,6 +133,12 @@ class Database:
             if 'radiologist_read' not in diag_columns:
                 cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN radiologist_read INTEGER DEFAULT 0')
 
+            # Add patient contact fields for request forms.
+            if 'patient_email' not in diag_columns:
+                cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN patient_email TEXT DEFAULT ""')
+            if 'phone_number' not in diag_columns:
+                cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN phone_number TEXT DEFAULT ""')
+
             # Drop legacy case_id column by rebuilding the table if it exists.
             if 'case_id' in diag_columns:
                 cursor.execute('''
@@ -142,6 +150,8 @@ class Database:
                         patient_id TEXT NOT NULL,
                         patient_age INTEGER NOT NULL,
                         patient_gender TEXT NOT NULL,
+                        patient_email TEXT,
+                        phone_number TEXT,
                         diagnosis_type TEXT NOT NULL,
                         scan_date TEXT NOT NULL,
                         priority TEXT NOT NULL,
@@ -157,13 +167,16 @@ class Database:
                 cursor.execute('''
                     INSERT INTO diagnosis_requests_new (
                         id, doctor_email, doctor_name, patient_name, patient_id,
-                        patient_age, patient_gender, diagnosis_type, scan_date,
+                        patient_age, patient_gender, patient_email, phone_number,
+                        diagnosis_type, scan_date,
                         priority, radiologist_email, description, status,
                         is_read, created_at, doctor_read, radiologist_read
                     )
                     SELECT
                         id, doctor_email, doctor_name, patient_name, patient_id,
-                        patient_age, patient_gender, diagnosis_type, scan_date,
+                        patient_age, patient_gender,
+                        COALESCE(patient_email, ''), COALESCE(phone_number, ''),
+                        diagnosis_type, scan_date,
                         priority, radiologist_email, description, status,
                         COALESCE(is_read, 0), created_at,
                         COALESCE(doctor_read, 0), COALESCE(radiologist_read, 0)
@@ -536,8 +549,9 @@ class Database:
         
         
     def save_diagnosis_request(self, doctor_email, doctor_name, patient_name,
-                               patient_id, patient_age, patient_gender, diagnosis_type, 
-                               scan_date, priority, radiologist_email, description):
+                               patient_id, patient_age, patient_gender, patient_email,
+                               phone_number, diagnosis_type, scan_date, priority,
+                               radiologist_email, description):
         """Save a diagnosis request"""
         try:
             conn = sqlite3.connect(self.db_name)
@@ -546,11 +560,12 @@ class Database:
             cursor.execute('''
                 INSERT INTO diagnosis_requests 
                 (doctor_email, doctor_name, patient_name, patient_id, patient_age, 
-                 patient_gender, diagnosis_type, scan_date, priority, radiologist_email, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 patient_gender, patient_email, phone_number, diagnosis_type,
+                                 scan_date, priority, radiologist_email, description)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (doctor_email.lower(), doctor_name, patient_name, patient_id,
-                  patient_age, patient_gender, diagnosis_type, scan_date, priority, 
-                  radiologist_email.lower(), description))
+                                    patient_age, patient_gender, patient_email.lower(), phone_number,
+                                    diagnosis_type, scan_date, priority, radiologist_email.lower(), description))
             
             conn.commit()
             conn.close()
@@ -656,7 +671,8 @@ class Database:
             cursor.execute('''
                 SELECT id, patient_name, patient_id, diagnosis_type,
                        radiologist_email, priority, status, created_at, doctor_read,
-                       patient_age, patient_gender, scan_date, description
+                       patient_age, patient_gender, patient_email, phone_number,
+                       scan_date, description
                 FROM diagnosis_requests
                 WHERE doctor_email = ?
                 ORDER BY created_at DESC
@@ -677,8 +693,10 @@ class Database:
                 'is_read': r[8],  # For backwards compatibility
                 'patient_age': r[9],
                 'patient_gender': r[10],
-                'scan_date': r[11],
-                'description': r[12]
+                'patient_email': r[11],
+                'phone_number': r[12],
+                'scan_date': r[13],
+                'description': r[14]
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests: {e}")
@@ -714,7 +732,8 @@ class Database:
             cursor.execute('''
                 SELECT id, patient_name, patient_id, diagnosis_type,
                        doctor_name, doctor_email, priority, status, created_at, radiologist_read,
-                       patient_age, patient_gender, scan_date, description
+                       patient_age, patient_gender, patient_email, phone_number,
+                       scan_date, description
                 FROM diagnosis_requests
                 WHERE radiologist_email = ?
                 ORDER BY created_at DESC
@@ -736,8 +755,10 @@ class Database:
                 'is_read': r[9],  # For backwards compatibility
                 'patient_age': r[10],
                 'patient_gender': r[11],
-                'scan_date': r[12],
-                'description': r[13]
+                'patient_email': r[12],
+                'phone_number': r[13],
+                'scan_date': r[14],
+                'description': r[15]
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests for radiologist: {e}")
