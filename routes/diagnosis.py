@@ -217,6 +217,32 @@ def get_doctor_patients(doctor_email):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
+@diagnosis_bp.route('/patients/delete', methods=['DELETE'])
+def delete_patient():
+    """Delete a patient profile for a doctor"""
+    try:
+        data = request.get_json() or {}
+
+        doctor_email = str(data.get('doctor_email', '')).strip().lower()
+        patient_id = str(data.get('patient_id', '')).strip()
+
+        if not doctor_email or not patient_id:
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        user = db.get_user_by_email(doctor_email)
+        if not user or user['user_type'] != 'doctor':
+            return jsonify({'success': False, 'message': 'Invalid doctor'}), 400
+
+        success, message = db.delete_patient_by_doctor_and_id(doctor_email, patient_id)
+        if not success:
+            status_code = 404 if message == 'Patient not found' else 400
+            return jsonify({'success': False, 'message': message}), status_code
+
+        return jsonify({'success': True, 'message': message}), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
 @diagnosis_bp.route('/mark-read/doctor/<int:request_id>', methods=['PUT'])
 def mark_read_doctor(request_id):
     """Mark request as read by doctor"""

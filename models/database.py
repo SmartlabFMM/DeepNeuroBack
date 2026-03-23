@@ -624,6 +624,28 @@ class Database:
         except Exception as e:
             print(f"Error retrieving patients: {e}")
             return []
+
+    def delete_patient_by_doctor_and_id(self, doctor_email, patient_id):
+        """Delete a patient profile owned by a specific doctor and patient ID."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                'DELETE FROM patients WHERE doctor_email = ? AND patient_id = ?',
+                (doctor_email.lower(), patient_id)
+            )
+
+            deleted_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+
+            if deleted_count > 0:
+                return True, "Patient deleted successfully"
+            return False, "Patient not found"
+        except Exception as e:
+            print(f"Error deleting patient: {e}")
+            return False, "Failed to delete patient"
     
     def get_requests_by_doctor(self, doctor_email):
         """Get all requests submitted by a specific doctor"""
