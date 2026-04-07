@@ -20,11 +20,13 @@ Backend/
 ├── requirements.txt
 ├── .env
 ├── medical_ai.db
+├── uploads/
 ├── models/
 │   └── database.py
 ├── routes/
 │   ├── auth.py
 │   └── diagnosis.py
+│   └── files.py
 └── services/
     └── email_service.py
 ```
@@ -106,6 +108,12 @@ Default server:
 - `PUT /mark-read/doctor/<request_id>`
 - `PUT /mark-read/radiologist/<request_id>`
 
+### File Routes (`/api/files`)
+
+- `GET /api/files?uploaded_by_email=<email>`
+- `POST /api/files/upload`
+- `GET /api/files/<file_id>/download?user_email=<email>`
+
 ## Data and Behavior Notes
 
 - SQLite tables are auto-created on startup in `models/database.py`.
@@ -114,6 +122,8 @@ Default server:
   - `02` -> radiologist
   - otherwise -> unknown
 - Passwords are hashed with SHA-256 before storage.
+- Uploaded files are written to `uploads/`, and SQLite stores file metadata only.
+- Upload limits default to 25 MB and accept PDFs, images, Office documents, CSV/TXT files, and NIfTI files.
 
 ## Quick Test
 

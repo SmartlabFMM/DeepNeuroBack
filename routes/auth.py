@@ -94,7 +94,6 @@ def verify_email():
                 }
             }), 200
         else:
-            db.increment_verification_attempts(email)
             return jsonify({'success': False, 'message': message}), 400
         
     except Exception as e:

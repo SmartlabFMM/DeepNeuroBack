@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 import sys
 import os
 
@@ -273,5 +273,137 @@ def mark_read_radiologist(request_id):
         
         return jsonify({'success': True, 'message': 'Request marked as read'}), 200
         
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@diagnosis_bp.route('/complete/<int:request_id>', methods=['PUT'])
+def complete_case_request(request_id):
+    """Attach test and segmentation files to a request and mark it completed."""
+    try:
+        data = request.get_json() or {}
+
+        # Only require radiologist email, diagnosis type, and test files
+        # Doctor and patient info are retrieved from the existing request record
+        required_fields = ['radiologist_email', 'diagnosis_type', 'uploaded_test_file']
+        if not all(str(data.get(field, '')).strip() for field in required_fields):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        radiologist_email = str(data.get('radiologist_email', '')).strip().lower()
+        diagnosis_type = str(data.get('diagnosis_type', '')).strip()
+        uploaded_test_file = str(data.get('uploaded_test_file', '')).strip()
+        segmentation_file = str(data.get('segmentation_file', '')).strip()  # Optional for testing
+
+        user = db.get_user_by_email(radiologist_email)
+        if not user or user['user_type'] != 'radiologist':
+            return jsonify({'success': False, 'message': 'Invalid radiologist'}), 400
+
+        success, message = db.complete_request_with_files(
+            request_id=request_id,
+            radiologist_email=radiologist_email,
+            diagnosis_type=diagnosis_type,
+            uploaded_test_file=uploaded_test_file,
+            segmentation_file=segmentation_file,
+        )
+
+        if not success:
+            status_code = 404 if message == 'Request not found for this radiologist' else 400
+            return jsonify({'success': False, 'message': message}), status_code
+
+        return jsonify({'success': True, 'message': message}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+@diagnosis_bp.route('/download/<int:request_id>/<file_type>/<user_email>', methods=['GET'])
+def download_attached_file(request_id, file_type, user_email):
+    """Download an attached test or segmentation file from a request."""
+    try:
+        user_email = str(user_email).strip().lower()
+        file_type = str(file_type).strip().lower()
+        file_index = int(request.args.get('file_index', 0))
+
+        if file_type not in ['test', 'segmentation']:
+            return jsonify({'success': False, 'message': 'Invalid file type'}), 400
+
+        # Verify user exists and get their type
+        user = db.get_user_by_email(user_email)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 400
+
+        user_type = user.get('user_type', '')
+
+        # Get the request record to verify authorization and get file paths
+        # Query database directly to get request details
+        try:
+            import sqlite3
+            conn = sqlite3.connect(db.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, doctor_email, radiologist_email, uploaded_test_file, segmentation_file
+                FROM diagnosis_requests
+                WHERE id = ?
+            """, (request_id,))
+
+            req = cursor.fetchone()
+            conn.close()
+
+            if not req:
+                return jsonify({'success': False, 'message': 'Request not found'}), 404
+
+            # Verify user is authorized (doctor or radiologist on this request)
+            if user_type == 'doctor':
+                if str(req['doctor_email']).lower() != user_email:
+                    return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+            elif user_type == 'radiologist':
+                if str(req['radiologist_email']).lower() != user_email:
+                    return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+            else:
+                return jsonify({'success': False, 'message': 'Invalid user type'}), 400
+
+            stored_value = req['uploaded_test_file'] if file_type == 'test' else req['segmentation_file']
+            if not stored_value or not str(stored_value).strip():
+                return jsonify({'success': False, 'message': f'No {file_type} file attached to this request'}), 404
+
+            file_reference = str(stored_value).strip()
+            if file_type == 'test':
+                file_references = [item.strip() for item in file_reference.split('|') if item.strip()]
+                if not file_references:
+                    return jsonify({'success': False, 'message': 'No test file attached to this request'}), 404
+                if file_index < 0 or file_index >= len(file_references):
+                    return jsonify({'success': False, 'message': 'Invalid file index'}), 400
+                file_reference = file_references[file_index]
+
+            file_record = None
+            if file_reference.isdigit():
+                file_record = db.get_uploaded_file(int(file_reference))
+
+            if file_record:
+                file_path = file_record.get('file_path', '')
+                if not file_path or not os.path.exists(file_path):
+                    return jsonify({'success': False, 'message': 'File not found on server'}), 404
+
+                return send_file(
+                    file_path,
+                    as_attachment=True,
+                    download_name=file_record.get('file_name') or os.path.basename(file_path)
+                )
+
+            file_path = file_reference
+
+            # Fallback for older records that still store absolute paths directly.
+            if not os.path.exists(file_path):
+                return jsonify({'success': False, 'message': 'File not found on server'}), 404
+
+            # Send file to client
+            return send_file(
+                file_path,
+                as_attachment=True,
+                download_name=os.path.basename(file_path)
+            )
+
+        except sqlite3.Error as e:
+            return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500

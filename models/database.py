@@ -5,6 +5,7 @@ from datetime import datetime
 class Database:
     def __init__(self, db_name='medical_ai.db'):
         self.db_name = db_name
+        self.db_path = db_name
         self.init_database()
     
     def init_database(self):
@@ -70,6 +71,9 @@ class Database:
                 priority TEXT NOT NULL,
                 radiologist_email TEXT NOT NULL,
                 description TEXT NOT NULL,
+                uploaded_test_file TEXT,
+                segmentation_file TEXT,
+                completed_at TIMESTAMP,
                 status TEXT DEFAULT 'Pending',
                 is_read INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -91,6 +95,19 @@ class Database:
                 conditions_notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(doctor_email, patient_id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS file_uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER DEFAULT 0,
+                mime_type TEXT DEFAULT '',
+                uploaded_by_email TEXT NOT NULL,
+                related_entity_id TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -139,6 +156,14 @@ class Database:
             if 'phone_number' not in diag_columns:
                 cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN phone_number TEXT DEFAULT ""')
 
+            # Add completion attachment fields.
+            if 'uploaded_test_file' not in diag_columns:
+                cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN uploaded_test_file TEXT DEFAULT ""')
+            if 'segmentation_file' not in diag_columns:
+                cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN segmentation_file TEXT DEFAULT ""')
+            if 'completed_at' not in diag_columns:
+                cursor.execute('ALTER TABLE diagnosis_requests ADD COLUMN completed_at TIMESTAMP')
+
             # Drop legacy case_id column by rebuilding the table if it exists.
             if 'case_id' in diag_columns:
                 cursor.execute('''
@@ -157,6 +182,9 @@ class Database:
                         priority TEXT NOT NULL,
                         radiologist_email TEXT NOT NULL,
                         description TEXT NOT NULL,
+                        uploaded_test_file TEXT,
+                        segmentation_file TEXT,
+                        completed_at TIMESTAMP,
                         status TEXT DEFAULT 'Pending',
                         is_read INTEGER DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -170,6 +198,7 @@ class Database:
                         patient_age, patient_gender, patient_email, phone_number,
                         diagnosis_type, scan_date,
                         priority, radiologist_email, description, status,
+                        uploaded_test_file, segmentation_file, completed_at,
                         is_read, created_at, doctor_read, radiologist_read
                     )
                     SELECT
@@ -178,6 +207,7 @@ class Database:
                         COALESCE(patient_email, ''), COALESCE(phone_number, ''),
                         diagnosis_type, scan_date,
                         priority, radiologist_email, description, status,
+                        COALESCE(uploaded_test_file, ''), COALESCE(segmentation_file, ''), completed_at,
                         COALESCE(is_read, 0), created_at,
                         COALESCE(doctor_read, 0), COALESCE(radiologist_read, 0)
                     FROM diagnosis_requests
@@ -190,6 +220,11 @@ class Database:
             patient_columns = [column[1] for column in cursor.fetchall()]
             if 'patient_email' not in patient_columns:
                 cursor.execute('ALTER TABLE patients ADD COLUMN patient_email TEXT DEFAULT ""')
+
+            cursor.execute("PRAGMA table_info(file_uploads)")
+            file_columns = [column[1] for column in cursor.fetchall()]
+            if file_columns and 'related_entity_id' not in file_columns:
+                cursor.execute('ALTER TABLE file_uploads ADD COLUMN related_entity_id TEXT DEFAULT ""')
         except sqlite3.OperationalError:
             # Table doesn't exist yet, will be created by CREATE TABLE IF NOT EXISTS
             pass
@@ -318,26 +353,39 @@ class Database:
             cursor = conn.cursor()
             
             cursor.execute(
-                'SELECT id, name, password_hash, medical_id, expiration_time FROM pending_verifications WHERE email = ? AND verification_code = ?',
-                (email.lower(), verification_code)
+                'SELECT id, name, password_hash, medical_id, verification_code, expiration_time FROM pending_verifications WHERE email = ?',
+                (email.lower(),)
             )
             
             record = cursor.fetchone()
             
             if not record:
                 conn.close()
+                return False, "Verification request not found"
+
+            # Count failed attempts for incorrect codes.
+            if record[4] != verification_code:
+                cursor.execute(
+                    'UPDATE pending_verifications SET attempts = attempts + 1 WHERE id = ?',
+                    (record[0],)
+                )
+                conn.commit()
+                conn.close()
                 return False, "Invalid verification code"
             
             # Check if code has expired
-            expiration_time = datetime.fromisoformat(record[4])
+            expiration_time = datetime.fromisoformat(record[5])
             if datetime.now() > expiration_time:
-                cursor.execute('DELETE FROM pending_verifications WHERE id = ?', (record[0],))
+                cursor.execute(
+                    'UPDATE pending_verifications SET attempts = attempts + 1 WHERE id = ?',
+                    (record[0],)
+                )
                 conn.commit()
                 conn.close()
                 return False, "Verification code has expired"
             
             # Create the verified user
-            verification_id, name, password_hash, medical_id, _ = record
+            verification_id, name, password_hash, medical_id, _, _ = record
 
             if not self.is_valid_medical_id(medical_id):
                 cursor.execute('DELETE FROM pending_verifications WHERE id = ?', (verification_id,))
@@ -672,7 +720,7 @@ class Database:
                 SELECT id, patient_name, patient_id, diagnosis_type,
                        radiologist_email, priority, status, created_at, doctor_read,
                        patient_age, patient_gender, patient_email, phone_number,
-                       scan_date, description
+                       scan_date, description, uploaded_test_file, segmentation_file, completed_at
                 FROM diagnosis_requests
                 WHERE doctor_email = ?
                 ORDER BY created_at DESC
@@ -696,7 +744,10 @@ class Database:
                 'patient_email': r[11],
                 'phone_number': r[12],
                 'scan_date': r[13],
-                'description': r[14]
+                'description': r[14],
+                'uploaded_test_file': r[15],
+                'segmentation_file': r[16],
+                'completed_at': r[17],
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests: {e}")
@@ -733,7 +784,7 @@ class Database:
                 SELECT id, patient_name, patient_id, diagnosis_type,
                        doctor_name, doctor_email, priority, status, created_at, radiologist_read,
                        patient_age, patient_gender, patient_email, phone_number,
-                       scan_date, description
+                       scan_date, description, uploaded_test_file, segmentation_file, completed_at
                 FROM diagnosis_requests
                 WHERE radiologist_email = ?
                 ORDER BY created_at DESC
@@ -758,7 +809,10 @@ class Database:
                 'patient_email': r[12],
                 'phone_number': r[13],
                 'scan_date': r[14],
-                'description': r[15]
+                'description': r[15],
+                'uploaded_test_file': r[16],
+                'segmentation_file': r[17],
+                'completed_at': r[18],
             } for r in requests]
         except Exception as e:
             print(f"Error retrieving requests for radiologist: {e}")
@@ -843,3 +897,146 @@ class Database:
         except Exception as e:
             print(f"Error marking request as read by radiologist: {e}")
             return False
+
+    def complete_request_with_files(self, request_id, radiologist_email, diagnosis_type,
+                                    uploaded_test_file, segmentation_file):
+        """Attach uploaded files and mark request completed by radiologist."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                '''
+                UPDATE diagnosis_requests
+                SET diagnosis_type = ?,
+                    uploaded_test_file = ?,
+                    segmentation_file = ?,
+                    status = 'Completed',
+                    completed_at = CURRENT_TIMESTAMP,
+                    doctor_read = 0
+                WHERE id = ? AND radiologist_email = ?
+                ''',
+                (diagnosis_type, uploaded_test_file, segmentation_file, request_id, radiologist_email.lower())
+            )
+
+            updated_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+
+            if updated_count > 0:
+                return True, "Case completed and files attached successfully"
+            return False, "Request not found for this radiologist"
+        except Exception as e:
+            print(f"Error completing request with files: {e}")
+            return False, "Failed to complete request"
+
+    def save_uploaded_file(self, file_name, file_path, uploaded_by_email,
+                           related_entity_id='', file_size=0, mime_type=''):
+        """Store uploaded file metadata in SQLite."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                '''
+                INSERT INTO file_uploads
+                (file_name, file_path, file_size, mime_type, uploaded_by_email, related_entity_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    file_name,
+                    file_path,
+                    int(file_size or 0),
+                    mime_type or '',
+                    uploaded_by_email.lower(),
+                    related_entity_id or '',
+                )
+            )
+
+            metadata_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return metadata_id
+        except Exception as e:
+            print(f"Error saving uploaded file metadata: {e}")
+            return None
+
+    def get_uploaded_file(self, file_id):
+        """Return a single uploaded file record by ID."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                '''
+                SELECT id, file_name, file_path, file_size, mime_type,
+                       uploaded_by_email, related_entity_id, created_at
+                FROM file_uploads
+                WHERE id = ?
+                ''',
+                (int(file_id),)
+            )
+
+            record = cursor.fetchone()
+            conn.close()
+
+            if not record:
+                return None
+
+            return {
+                'id': record[0],
+                'file_name': record[1],
+                'file_path': record[2],
+                'file_size': record[3],
+                'mime_type': record[4],
+                'uploaded_by_email': record[5],
+                'related_entity_id': record[6],
+                'created_at': record[7],
+            }
+        except Exception as e:
+            print(f"Error retrieving uploaded file: {e}")
+            return None
+
+    def get_uploaded_files(self, uploaded_by_email=None, related_entity_id=None):
+        """Return uploaded file metadata, optionally filtered by uploader or related entity."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            query = '''
+                SELECT id, file_name, file_path, file_size, mime_type,
+                       uploaded_by_email, related_entity_id, created_at
+                FROM file_uploads
+            '''
+            conditions = []
+            parameters = []
+
+            if uploaded_by_email:
+                conditions.append('LOWER(uploaded_by_email) = ?')
+                parameters.append(uploaded_by_email.lower())
+            if related_entity_id:
+                conditions.append('related_entity_id = ?')
+                parameters.append(related_entity_id)
+
+            if conditions:
+                query += ' WHERE ' + ' AND '.join(conditions)
+
+            query += ' ORDER BY created_at DESC, id DESC'
+
+            cursor.execute(query, parameters)
+            records = cursor.fetchall()
+            conn.close()
+
+            return [{
+                'id': record[0],
+                'file_name': record[1],
+                'file_path': record[2],
+                'file_size': record[3],
+                'mime_type': record[4],
+                'uploaded_by_email': record[5],
+                'related_entity_id': record[6],
+                'created_at': record[7],
+            } for record in records]
+        except Exception as e:
+            print(f"Error retrieving uploaded files: {e}")
+            return []

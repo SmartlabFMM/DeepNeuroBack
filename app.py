@@ -21,6 +21,7 @@ def create_app(config_name=None):
     
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
     # Enable CORS
     CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
@@ -28,9 +29,11 @@ def create_app(config_name=None):
     # Register blueprints
     from routes import auth_bp
     from routes import diagnosis_bp
+    from routes import files_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(diagnosis_bp)
+    app.register_blueprint(files_bp)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -50,7 +53,8 @@ def create_app(config_name=None):
             'endpoints': {
                 'auth': '/api/auth',
                 'health': '/api/health',
-                'diagnosis': '/api/diagnosis'
+                'diagnosis': '/api/diagnosis',
+                'files': '/api/files'
             }
         }), 200
     
@@ -75,6 +79,13 @@ def create_app(config_name=None):
             'success': False,
             'message': 'Internal server error'
         }), 500
+
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        return jsonify({
+            'success': False,
+            'message': 'File too large'
+        }), 413
     
     return app
 
