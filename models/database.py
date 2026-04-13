@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import os
 from datetime import datetime
 
 class Database:
@@ -729,26 +730,36 @@ class Database:
             requests = cursor.fetchall()
             conn.close()
             
-            return [{
-                'id': r[0],
-                'patient_name': r[1],
-                'patient_id': r[2],
-                'diagnosis_type': r[3],
-                'radiologist_email': r[4],
-                'priority': r[5],
-                'status': r[6],
-                'created_at': r[7],
-                'is_read': r[8],  # For backwards compatibility
-                'patient_age': r[9],
-                'patient_gender': r[10],
-                'patient_email': r[11],
-                'phone_number': r[12],
-                'scan_date': r[13],
-                'description': r[14],
-                'uploaded_test_file': r[15],
-                'segmentation_file': r[16],
-                'completed_at': r[17],
-            } for r in requests]
+            results = []
+            for r in requests:
+                uploaded_refs = self._split_stored_file_refs(r[15])
+                uploaded_names = [self._resolve_file_reference_name(ref) for ref in uploaded_refs]
+                segmentation_name = self._resolve_file_reference_name(r[16])
+
+                results.append({
+                    'id': r[0],
+                    'patient_name': r[1],
+                    'patient_id': r[2],
+                    'diagnosis_type': r[3],
+                    'radiologist_email': r[4],
+                    'priority': r[5],
+                    'status': r[6],
+                    'created_at': r[7],
+                    'is_read': r[8],  # For backwards compatibility
+                    'patient_age': r[9],
+                    'patient_gender': r[10],
+                    'patient_email': r[11],
+                    'phone_number': r[12],
+                    'scan_date': r[13],
+                    'description': r[14],
+                    'uploaded_test_file': r[15],
+                    'uploaded_test_file_names': uploaded_names,
+                    'segmentation_file': r[16],
+                    'segmentation_file_name': segmentation_name,
+                    'completed_at': r[17],
+                })
+
+            return results
         except Exception as e:
             print(f"Error retrieving requests: {e}")
             return []
@@ -793,30 +804,63 @@ class Database:
             requests = cursor.fetchall()
             conn.close()
             
-            return [{
-                'id': r[0],
-                'patient_name': r[1],
-                'patient_id': r[2],
-                'diagnosis_type': r[3],
-                'doctor_name': r[4],
-                'doctor_email': r[5],
-                'priority': r[6],
-                'status': r[7],
-                'created_at': r[8],
-                'is_read': r[9],  # For backwards compatibility
-                'patient_age': r[10],
-                'patient_gender': r[11],
-                'patient_email': r[12],
-                'phone_number': r[13],
-                'scan_date': r[14],
-                'description': r[15],
-                'uploaded_test_file': r[16],
-                'segmentation_file': r[17],
-                'completed_at': r[18],
-            } for r in requests]
+            results = []
+            for r in requests:
+                uploaded_refs = self._split_stored_file_refs(r[16])
+                uploaded_names = [self._resolve_file_reference_name(ref) for ref in uploaded_refs]
+                segmentation_name = self._resolve_file_reference_name(r[17])
+
+                results.append({
+                    'id': r[0],
+                    'patient_name': r[1],
+                    'patient_id': r[2],
+                    'diagnosis_type': r[3],
+                    'doctor_name': r[4],
+                    'doctor_email': r[5],
+                    'priority': r[6],
+                    'status': r[7],
+                    'created_at': r[8],
+                    'is_read': r[9],  # For backwards compatibility
+                    'patient_age': r[10],
+                    'patient_gender': r[11],
+                    'patient_email': r[12],
+                    'phone_number': r[13],
+                    'scan_date': r[14],
+                    'description': r[15],
+                    'uploaded_test_file': r[16],
+                    'uploaded_test_file_names': uploaded_names,
+                    'segmentation_file': r[17],
+                    'segmentation_file_name': segmentation_name,
+                    'completed_at': r[18],
+                })
+
+            return results
         except Exception as e:
             print(f"Error retrieving requests for radiologist: {e}")
             return []
+
+    def _split_stored_file_refs(self, stored_value):
+        """Split a stored file reference string into individual references."""
+        if not stored_value:
+            return []
+        return [item.strip() for item in str(stored_value).split('|') if item.strip()]
+
+    def _resolve_file_reference_name(self, file_reference):
+        """Resolve a file reference (ID/path) to the original display name."""
+        if file_reference is None:
+            return ''
+
+        ref = str(file_reference).strip()
+        if not ref:
+            return ''
+
+        if ref.isdigit():
+            file_record = self.get_uploaded_file(int(ref))
+            if file_record and file_record.get('file_name'):
+                return str(file_record.get('file_name'))
+            return ref
+
+        return os.path.basename(ref) or ref
     
     def get_previous_cases_by_doctor(self, doctor_email):
         """Get all previous cases with patient information for autocomplete"""
