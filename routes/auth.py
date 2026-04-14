@@ -14,11 +14,17 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 db = Database()
 email_service = EmailService()
 
+
+def _json_body():
+    """Return request JSON as dict, or an empty dict for invalid/missing payloads."""
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
 @auth_bp.route('/register', methods=['POST'])
 def register():
     """Register a new user - saves pending verification until email is verified"""
     try:
-        data = request.get_json()
+        data = _json_body()
         
         name = data.get('name', '').strip()
         email = data.get('email', '').strip().lower()
@@ -69,7 +75,7 @@ def register():
 def verify_email():
     """Verify email with verification code"""
     try:
-        data = request.get_json()
+        data = _json_body()
         
         email = data.get('email', '').strip().lower()
         verification_code = data.get('verification_code', '').strip()
@@ -103,7 +109,7 @@ def verify_email():
 def login():
     """Login user with email and password"""
     try:
-        data = request.get_json()
+        data = _json_body()
         
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
@@ -137,7 +143,7 @@ def login():
 def request_password_reset():
     """Request password reset"""
     try:
-        data = request.get_json()
+        data = _json_body()
         email = data.get('email', '').strip().lower()
         
         if not email:
@@ -175,7 +181,7 @@ def request_password_reset():
 def verify_reset_code():
     """Verify password reset code"""
     try:
-        data = request.get_json()
+        data = _json_body()
         email = data.get('email', '').strip().lower()
         verification_code = data.get('verification_code', '').strip()
         
@@ -197,7 +203,7 @@ def verify_reset_code():
 def reset_password():
     """Reset password with verified code"""
     try:
-        data = request.get_json()
+        data = _json_body()
         email = data.get('email', '').strip().lower()
         verification_code = data.get('verification_code', '').strip()
         new_password = data.get('new_password', '')

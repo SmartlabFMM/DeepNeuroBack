@@ -117,7 +117,7 @@ def download_file(file_id):
         return send_file(
             file_path,
             as_attachment=True,
-            download_name=os.path.basename(file_path),
+            download_name=file_record.get('file_name') or os.path.basename(file_path),
             mimetype=file_record.get('mime_type') or None,
         )
     except Exception as e:

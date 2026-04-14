@@ -5,8 +5,9 @@ from datetime import datetime
 
 class Database:
     def __init__(self, db_name='medical_ai.db'):
-        self.db_name = db_name
-        self.db_path = db_name
+        configured_db = db_name or os.environ.get('DATABASE_PATH') or 'medical_ai.db'
+        self.db_path = os.path.abspath(configured_db)
+        self.db_name = self.db_path
         self.init_database()
     
     def init_database(self):

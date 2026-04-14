@@ -17,11 +17,17 @@ except Exception as e:
     print(f"Warning: Email service unavailable in diagnosis routes: {e}")
     email_service = None
 
+
+def _json_body():
+    """Return request JSON as dict, or an empty dict for invalid/missing payloads."""
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
 @diagnosis_bp.route('/submit', methods=['POST'])
 def submit_diagnosis_request():
     """Submit a new diagnosis request"""
     try:
-        data = request.get_json()
+        data = _json_body()
         
         required_fields = ['doctor_email', 'doctor_name', 'patient_name', 
                   'patient_id', 'patient_age', 'patient_gender',
@@ -167,7 +173,7 @@ def get_previous_cases(doctor_email):
 def add_patient():
     """Add a patient profile for a doctor"""
     try:
-        data = request.get_json()
+        data = _json_body()
 
         required_fields = [
             'doctor_email', 'patient_name', 'patient_age', 'patient_sex',
@@ -226,7 +232,7 @@ def get_doctor_patients(doctor_email):
 def delete_patient():
     """Delete a patient profile for a doctor"""
     try:
-        data = request.get_json() or {}
+        data = _json_body()
 
         doctor_email = str(data.get('doctor_email', '')).strip().lower()
         patient_id = str(data.get('patient_id', '')).strip()
@@ -280,7 +286,7 @@ def mark_read_radiologist(request_id):
 def complete_case_request(request_id):
     """Attach test and segmentation files to a request and mark it completed."""
     try:
-        data = request.get_json() or {}
+        data = _json_body()
 
         # Only require radiologist email, diagnosis type, and test files
         # Doctor and patient info are retrieved from the existing request record
