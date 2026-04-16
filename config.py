@@ -21,7 +21,7 @@ class Config:
     # Email Configuration
     EMAIL_SENDER = os.environ.get('EMAIL_SENDER')
     EMAIL_APP_PASSWORD = os.environ.get('EMAIL_APP_PASSWORD')
-    SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    SMTP_SERVER = os.environ.get('SMTP_SERVER')
     SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
     
 class DevelopmentConfig(Config):
