@@ -28,7 +28,10 @@ Backend/
 │   └── diagnosis.py
 │   └── files.py
 └── services/
-    └── email_service.py
+│   ├── email_service.py
+│   └── ai_models/
+│       ├── __init__.py
+│       └── segmentation_models.py
 ```
 
 ## Prerequisites
@@ -113,6 +116,11 @@ Default server:
 - `GET /api/files?uploaded_by_email=<email>`
 - `POST /api/files/upload`
 - `GET /api/files/<file_id>/download?user_email=<email>`
+
+### Model Routes (`/api/models`)
+
+- `GET /api/models/segmentation`
+- `GET /api/models/segmentation?diagnosis_type=<diagnosis_type>`
 
 ## Data and Behavior Notes
 

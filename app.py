@@ -30,10 +30,12 @@ def create_app(config_name=None):
     from routes import auth_bp
     from routes import diagnosis_bp
     from routes import files_bp
+    from routes import models_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(diagnosis_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(models_bp)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -54,7 +56,8 @@ def create_app(config_name=None):
                 'auth': '/api/auth',
                 'health': '/api/health',
                 'diagnosis': '/api/diagnosis',
-                'files': '/api/files'
+                'files': '/api/files',
+                'models': '/api/models'
             }
         }), 200
     
@@ -94,5 +97,6 @@ if __name__ == '__main__':
     app.run(
         host='0.0.0.0',
         port=5000,
-        debug=True
+        debug=True,
+        use_reloader=False
     )

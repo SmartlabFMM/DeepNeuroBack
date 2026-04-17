@@ -55,3 +55,4 @@ Thumbs.db
 # Project specific
 medical_ai.db
 uploads/
+services/ai_models/*.h5
