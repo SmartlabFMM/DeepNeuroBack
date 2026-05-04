@@ -20,7 +20,7 @@ class Config:
         'GLIOMA_SEGMENTATION_OUTPUT_DIR',
         os.path.join(os.path.dirname(__file__), 'uploads', 'glioma_segmentations')
     )
-    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 25 * 1024 * 1024))
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 30 * 1024 * 1024))
     ALLOWED_FILE_EXTENSIONS = [
         'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff',
         'txt', 'rtf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'nii', 'gz'
