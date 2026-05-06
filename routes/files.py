@@ -14,6 +14,24 @@ files_bp = Blueprint('files', __name__, url_prefix='/api/files')
 db = Database()
 
 
+def _resolve_upload_path(file_reference):
+    file_reference = str(file_reference or '').strip()
+    if not file_reference:
+        return ''
+
+    if os.path.exists(file_reference):
+        return file_reference
+
+    upload_folder = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+    )
+    candidate_path = os.path.join(upload_folder, os.path.basename(file_reference))
+    if os.path.exists(candidate_path):
+        return candidate_path
+
+    return file_reference
+
+
 def _allowed_file(filename):
     extension = os.path.splitext(filename)[1].lower().lstrip('.')
     allowed_extensions = set(current_app.config.get('ALLOWED_FILE_EXTENSIONS', []))
@@ -110,7 +128,7 @@ def download_file(file_id):
         if file_record.get('uploaded_by_email', '').lower() != user_email:
             return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-        file_path = file_record.get('file_path', '')
+        file_path = _resolve_upload_path(file_record.get('file_path', ''))
         if not file_path or not os.path.exists(file_path):
             return jsonify({'success': False, 'message': 'File not found on server'}), 404
 

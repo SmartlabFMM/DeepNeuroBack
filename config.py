@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 # Load environment variables from a .env file located at the project root (two levels up)
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 if ENV_PATH.exists():
-    load_dotenv(dotenv_path=str(ENV_PATH))
+    load_dotenv(dotenv_path=str(ENV_PATH), override=True)
 else:
     # load default .env if present in CWD, otherwise continue — missing .env will be caught by require_env
-    load_dotenv()
+    load_dotenv(override=True)
 
 
 def _require_env(key: str) -> str:

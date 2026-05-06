@@ -23,6 +23,25 @@ def _json_body():
     data = request.get_json(silent=True)
     return data if isinstance(data, dict) else {}
 
+
+def _resolve_upload_path(file_reference):
+    """Resolve a stored file reference against the backend uploads folder."""
+    file_reference = str(file_reference or '').strip()
+    if not file_reference:
+        return ''
+
+    if os.path.exists(file_reference):
+        return file_reference
+
+    upload_folder = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+    )
+    candidate_path = os.path.join(upload_folder, os.path.basename(file_reference))
+    if os.path.exists(candidate_path):
+        return candidate_path
+
+    return file_reference
+
 @diagnosis_bp.route('/submit', methods=['POST'])
 def submit_diagnosis_request():
     """Submit a new diagnosis request"""
@@ -395,7 +414,7 @@ def download_attached_file(request_id, file_type, user_email):
                     download_name=file_record.get('file_name') or os.path.basename(file_path)
                 )
 
-            file_path = file_reference
+            file_path = _resolve_upload_path(file_reference)
 
             # Fallback for older records that still store absolute paths directly.
             if not os.path.exists(file_path):
