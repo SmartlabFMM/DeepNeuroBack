@@ -47,11 +47,40 @@ def _extract_case_id(file_path):
     else:
         base_name = os.path.splitext(base_name)[0]
 
+    base_name = re.sub(r'^(flair|t1|t1ce|t1c|t2f|t2)[-_]+', '', base_name, flags=re.IGNORECASE)
     base_name = re.sub(r'[-_](t2f|flair|t1n|t1c|t1ce|t2w|t2)$', '', base_name, flags=re.IGNORECASE)
+    base_name = re.sub(r'^brats[-_]*gli[-_]*', '', base_name, flags=re.IGNORECASE)
+
     match = re.search(r'(\d{3,}-\d{2,})', base_name)
     if match:
         return match.group(1)
+
+    # BraTS-like IDs such as 00002-000
+    match = re.search(r'(\d{5}-\d{3})', base_name)
+    if match:
+        return match.group(1)
+
     return base_name.strip('-_ ')
+
+
+def _build_output_stem(file_path):
+    """Build a stable output stem using case id where possible."""
+    file_name = os.path.basename(file_path)
+    stem = file_name
+    if stem.lower().endswith('.nii.gz'):
+        stem = stem[:-7]
+    else:
+        stem = os.path.splitext(stem)[0]
+
+    stem = re.sub(r'^(flair|t1|t1ce|t1c|t2f|t2)[-_]+', '', stem, flags=re.IGNORECASE)
+    stem = re.sub(r'[-_](t2f|flair|t1n|t1c|t1ce|t2w|t2)$', '', stem, flags=re.IGNORECASE)
+    stem = re.sub(r'^brats[-_]*gli[-_]*', '', stem, flags=re.IGNORECASE)
+    stem = stem.strip('-_ ')
+
+    case_id = _extract_case_id(stem)
+    if case_id:
+        return case_id
+    return stem or f'glioma_segmentation_{uuid.uuid4().hex}'
 
 
 class GliomaSegmentationService:
@@ -62,7 +91,7 @@ class GliomaSegmentationService:
         self.model_path = (model_path or os.environ.get('GLIOMA_SEGMENTATION_MODEL_PATH', default_model_path)).strip()
         self.output_dir = output_dir or os.environ.get(
             'GLIOMA_SEGMENTATION_OUTPUT_DIR',
-            os.path.join(tempfile.gettempdir(), 'DeepNeuro', 'glioma_segmentations'),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads', 'glioma_segmentations'),
         )
         self._model = None
 
@@ -115,8 +144,8 @@ class GliomaSegmentationService:
         segmentation = np.argmax(prediction, axis=-1).astype(np.uint8)
 
         os.makedirs(self.output_dir, exist_ok=True)
-        case_id = _extract_case_id(flair_path)
-        output_name = f'{case_id}.nii.gz' if case_id else f'glioma_segmentation_{uuid.uuid4().hex}.nii.gz'
+        output_stem = _build_output_stem(flair_path)
+        output_name = f'{output_stem}_seg.nii.gz'
         output_path = os.path.join(self.output_dir, output_name)
 
         segmentation_image = nib.Nifti1Image(segmentation, affine=reference_image.affine, header=reference_image.header)

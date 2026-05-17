@@ -52,7 +52,7 @@ def generate_glioma_segmentation():
             if not filename:
                 filename = f'{field}.nii.gz'
 
-            save_path = os.path.join(temp_root, f'{field}_{filename}')
+            save_path = os.path.join(temp_root, filename)
             file_storage.save(save_path)
             input_paths[field] = save_path
             saved_paths.append(save_path)

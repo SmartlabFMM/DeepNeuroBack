@@ -22,6 +22,7 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['GLIOMA_SEGMENTATION_OUTPUT_DIR'], exist_ok=True)
     
     # Enable CORS
     CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})

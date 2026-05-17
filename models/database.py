@@ -1,6 +1,7 @@
 import sqlite3
 import hashlib
 import os
+import re
 from datetime import datetime
 
 class Database:
@@ -735,7 +736,9 @@ class Database:
             for r in requests:
                 uploaded_refs = self._split_stored_file_refs(r[15])
                 uploaded_names = [self._resolve_file_reference_name(ref) for ref in uploaded_refs]
-                segmentation_name = self._resolve_file_reference_name(r[16])
+                segmentation_name = self._normalize_segmentation_display_name(
+                    self._resolve_file_reference_name(r[16])
+                )
 
                 results.append({
                     'id': r[0],
@@ -809,7 +812,9 @@ class Database:
             for r in requests:
                 uploaded_refs = self._split_stored_file_refs(r[16])
                 uploaded_names = [self._resolve_file_reference_name(ref) for ref in uploaded_refs]
-                segmentation_name = self._resolve_file_reference_name(r[17])
+                segmentation_name = self._normalize_segmentation_display_name(
+                    self._resolve_file_reference_name(r[17])
+                )
 
                 results.append({
                     'id': r[0],
@@ -862,6 +867,34 @@ class Database:
             return ref
 
         return os.path.basename(ref) or ref
+
+    def _normalize_segmentation_display_name(self, file_name):
+        """Normalize segmentation filename for UI display."""
+        name = str(file_name or '').strip()
+        if not name:
+            return ''
+
+        stem = name
+        ext = ''
+        if stem.lower().endswith('.nii.gz'):
+            stem = stem[:-7]
+            ext = '.nii.gz'
+        else:
+            stem, single_ext = os.path.splitext(stem)
+            ext = single_ext or ''
+
+        stem = re.sub(r'^(flair|t1|t1ce|t1c|t2f|t2)[-_]+', '', stem, flags=re.IGNORECASE)
+        stem = re.sub(r'^brats[-_]*gli[-_]*', '', stem, flags=re.IGNORECASE)
+        stem = re.sub(r'[-_](t2f|flair|t1n|t1c|t1ce|t2w|t2)$', '', stem, flags=re.IGNORECASE)
+        stem = re.sub(r'_seg$', '', stem, flags=re.IGNORECASE)
+        stem = stem.strip('-_ ')
+
+        # Keep only a concise case-id-like part if present.
+        match = re.search(r'(\d{3,}-\d{2,}|\d{5}-\d{3})', stem)
+        if match:
+            stem = match.group(1)
+
+        return f"{stem}_seg{ext}" if stem else file_name
     
     def get_previous_cases_by_doctor(self, doctor_email):
         """Get all previous cases with patient information for autocomplete"""

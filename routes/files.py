@@ -29,6 +29,10 @@ def _resolve_upload_path(file_reference):
     if os.path.exists(candidate_path):
         return candidate_path
 
+    for root, _, filenames in os.walk(upload_folder):
+        if os.path.basename(file_reference) in filenames:
+            return os.path.join(root, os.path.basename(file_reference))
+
     return file_reference
 
 
