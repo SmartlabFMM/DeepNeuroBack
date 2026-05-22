@@ -346,6 +346,151 @@ Please log in to DeepNeuro to review and process this request.
         except Exception as e:
             print(f"Error sending new case notification email: {e}")
             return False
+
+    def send_case_completion_email(self, recipient_email, doctor_name, case_info):
+        """
+        Send a case completion notification to the doctor.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            subject = "DeepNeuro - Case Completed ✓"
+
+            radiologist_name = case_info.get('radiologist_name', 'Radiologist')
+            radiologist_email = case_info.get('radiologist_email', 'N/A')
+            patient_name = case_info.get('patient_name', 'N/A')
+            patient_id = case_info.get('patient_id', 'N/A')
+            diagnosis_type = case_info.get('diagnosis_type', 'N/A')
+            scan_date = case_info.get('scan_date', 'N/A')
+            priority = case_info.get('priority', 'N/A')
+            request_id = case_info.get('request_id', 'N/A')
+            completed_at = case_info.get('completed_at', 'N/A')
+
+            priority_color = '#ef4444' if priority == 'Urgent' else '#10b981'
+            priority_text_color = '#7f1d1d' if priority == 'Urgent' else '#065f46'
+
+            body = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
+                    <div style="max-width: 620px; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden;">
+                        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center;">
+                            <h2 style="margin: 0; font-size: 26px;">✓ Case Completed</h2>
+                            <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">Your diagnosis request has been completed</p>
+                        </div>
+
+                        <div style="padding: 30px; color: #1f2937;">
+                            <p style="margin-top: 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                Dear Dr. {doctor_name},
+                            </p>
+                            
+                            <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                                The diagnosis request for <strong>{patient_name}</strong> has been completed by Dr. <strong>{radiologist_name}</strong>.
+                            </p>
+
+                            <h3 style="font-size: 15px; color: #10b981; margin: 18px 0 10px 0;">Case Summary</h3>
+                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 180px; color: #374151;">Request ID</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{request_id}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient Name</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_name}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Patient ID</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{patient_id}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Diagnosis Type</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{diagnosis_type}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Scan Date</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{scan_date}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Priority</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: {priority_color}; color: {priority_text_color}; font-weight: 600;">{priority}</td>
+                                </tr>
+                            </table>
+
+                            <h3 style="font-size: 15px; color: #10b981; margin: 18px 0 10px 0;">Radiologist Information</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 180px; color: #374151;">Radiologist Name</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{radiologist_name}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Radiologist Email</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{radiologist_email}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Completed At</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{completed_at}</td>
+                                </tr>
+                            </table>
+
+                            <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; margin: 20px 0; border-radius: 4px;">
+                                <p style="margin: 0; color: #065f46; font-size: 13px;">
+                                    <strong>Next Steps:</strong> Log in to DeepNeuro to review the completed diagnosis, view the attached test files, and segmentation results.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="background-color: #f5f5f5; border-top: 1px solid #e0e0e0; padding: 20px; text-align: center;">
+                            <p style="color: #999; font-size: 12px; margin: 0;">
+                                © 2026 DeepNeuro. All rights reserved.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+            </html>
+            """
+
+            text_body = f"""
+DeepNeuro - Case Completed
+
+Dear Dr. {doctor_name},
+
+The diagnosis request for {patient_name} has been completed by Dr. {radiologist_name}.
+
+Case Summary:
+- Request ID: {request_id}
+- Patient Name: {patient_name}
+- Patient ID: {patient_id}
+- Diagnosis Type: {diagnosis_type}
+- Scan Date: {scan_date}
+- Priority: {priority}
+- Radiologist: {radiologist_name}
+- Radiologist Email: {radiologist_email}
+- Completed At: {completed_at}
+
+Please log in to DeepNeuro to review the completed diagnosis and view the attached files.
+
+© 2026 DeepNeuro. All rights reserved.
+            """
+
+            message = MIMEMultipart("alternative")
+            message["Subject"] = subject
+            message["From"] = self.sender_email
+            message["To"] = recipient_email
+
+            part1 = MIMEText(text_body, "plain")
+            part2 = MIMEText(body, "html")
+
+            message.attach(part1)
+            message.attach(part2)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.sender_email, self.app_password)
+                server.sendmail(self.sender_email, recipient_email, message.as_string())
+
+            return True
+
+        except Exception as e:
+            print(f"Error sending case completion email: {e}")
+            return False
     
     def get_expiration_time(self, minutes=15):
         """Get expiration time for verification code"""

@@ -248,3 +248,105 @@ def get_user(email):
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+
+@auth_bp.route('/profile/<email>', methods=['GET'])
+def get_user_profile(email):
+    """Get user profile information"""
+    try:
+        email = email.strip().lower()
+        user = db.get_user_by_email(email)
+        
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'name': user.get('name', ''),
+                'email': user.get('email', ''),
+                'medical_id': user.get('medical_id', ''),
+                'user_type': user.get('user_type', ''),
+                'created_at': user.get('created_at', ''),
+                'last_login': user.get('last_login', ''),
+                'email_verified': user.get('email_verified', 0)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+
+@auth_bp.route('/settings/<email>', methods=['GET'])
+def get_user_settings(email):
+    """Get user settings"""
+    try:
+        email = email.strip().lower()
+        user = db.get_user_by_email(email)
+        
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # Return default settings (in a real app, these would be stored in DB)
+        settings = {
+            'case_request_notify': True,
+            'case_completed_notify': True,
+            'patient_update_notify': True,
+            'system_notify': True,
+            'notification_frequency': 'Immediately',
+            'theme': 'Light',
+            'font_size': 10,
+            'autosave': True,
+            'session_timeout': 120,
+            'allow_analytics': True,
+            'allow_data_sharing': False
+        }
+        
+        return jsonify({
+            'success': True,
+            'settings': settings
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+
+@auth_bp.route('/settings', methods=['POST'])
+def save_user_settings():
+    """Save user settings"""
+    try:
+        data = _json_body()
+        user_email = data.get('user_email', '').strip().lower()
+        
+        if not user_email:
+            return jsonify({'success': False, 'message': 'User email required'}), 400
+        
+        user = db.get_user_by_email(user_email)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # In a real app, save these settings to a user_settings table
+        # For now, just acknowledge receipt
+        settings = {
+            'case_request_notify': data.get('case_request_notify', True),
+            'case_completed_notify': data.get('case_completed_notify', True),
+            'patient_update_notify': data.get('patient_update_notify', True),
+            'system_notify': data.get('system_notify', True),
+            'notification_frequency': data.get('notification_frequency', 'Immediately'),
+            'theme': data.get('theme', 'Light'),
+            'font_size': data.get('font_size', 10),
+            'autosave': data.get('autosave', True),
+            'session_timeout': data.get('session_timeout', 120),
+            'allow_analytics': data.get('allow_analytics', True),
+            'allow_data_sharing': data.get('allow_data_sharing', False)
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': 'Settings saved successfully',
+            'settings': settings
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+

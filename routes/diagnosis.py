@@ -326,6 +326,25 @@ def complete_case_request(request_id):
         if not user or user['user_type'] != 'radiologist':
             return jsonify({'success': False, 'message': 'Invalid radiologist'}), 400
 
+        # Fetch request details before completion
+        import sqlite3
+        conn = sqlite3.connect(db.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, doctor_email, doctor_name, patient_name, patient_id, 
+                   diagnosis_type, scan_date, priority, radiologist_email, created_at
+            FROM diagnosis_requests
+            WHERE id = ? AND radiologist_email = ?
+        """, (request_id, radiologist_email))
+        
+        request_record = cursor.fetchone()
+        conn.close()
+        
+        if not request_record:
+            return jsonify({'success': False, 'message': 'Request not found for this radiologist'}), 404
+
         success, message = db.complete_request_with_files(
             request_id=request_id,
             radiologist_email=radiologist_email,
@@ -337,6 +356,29 @@ def complete_case_request(request_id):
         if not success:
             status_code = 404 if message == 'Request not found for this radiologist' else 400
             return jsonify({'success': False, 'message': message}), status_code
+
+        # Send completion email to doctor
+        if email_service:
+            doctor_email = request_record['doctor_email']
+            doctor_name = request_record['doctor_name']
+            
+            case_info = {
+                'request_id': request_id,
+                'radiologist_name': user.get('name', 'Radiologist'),
+                'radiologist_email': radiologist_email,
+                'patient_name': request_record['patient_name'],
+                'patient_id': request_record['patient_id'],
+                'diagnosis_type': request_record['diagnosis_type'],
+                'scan_date': request_record['scan_date'],
+                'priority': request_record['priority'],
+                'completed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            try:
+                email_service.send_case_completion_email(doctor_email, doctor_name, case_info)
+            except Exception as e:
+                print(f"Warning: Failed to send case completion email: {e}")
+
 
         return jsonify({'success': True, 'message': message}), 200
     except Exception as e:
