@@ -360,10 +360,26 @@ Please log in to DeepNeuro to review and process this request.
             patient_name = case_info.get('patient_name', 'N/A')
             patient_id = case_info.get('patient_id', 'N/A')
             diagnosis_type = case_info.get('diagnosis_type', 'N/A')
-            scan_date = case_info.get('scan_date', 'N/A')
+            raw_request_date = case_info.get('created_at', 'N/A')
             priority = case_info.get('priority', 'N/A')
             request_id = case_info.get('request_id', 'N/A')
-            completed_at = case_info.get('completed_at', 'N/A')
+            raw_completed_at = case_info.get('completed_at', 'N/A')
+
+            def fmt_date(val):
+                if not val:
+                    return 'N/A'
+                try:
+                    if isinstance(val, datetime):
+                        return val.strftime('%d-%m-%Y %H:%M')
+                    s = str(val).strip()
+                    normalized = s.replace('Z', '+00:00')
+                    d = datetime.fromisoformat(normalized)
+                    return d.strftime('%d-%m-%Y %H:%M')
+                except Exception:
+                    return str(val)
+
+            request_date = fmt_date(raw_request_date)
+            completed_at = fmt_date(raw_completed_at)
 
             priority_color = '#ef4444' if priority == 'Urgent' else '#10b981'
             priority_text_color = '#7f1d1d' if priority == 'Urgent' else '#065f46'
@@ -405,8 +421,8 @@ Please log in to DeepNeuro to review and process this request.
                                     <td style="padding: 8px; border: 1px solid #e5e7eb;">{diagnosis_type}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Scan Date</td>
-                                    <td style="padding: 8px; border: 1px solid #e5e7eb;">{scan_date}</td>
+                                    <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Request Date</td>
+                                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{request_date}</td>
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; color: #374151;">Priority</td>
@@ -459,7 +475,7 @@ Case Summary:
 - Patient Name: {patient_name}
 - Patient ID: {patient_id}
 - Diagnosis Type: {diagnosis_type}
-- Scan Date: {scan_date}
+- Request Date: {request_date}
 - Priority: {priority}
 - Radiologist: {radiologist_name}
 - Radiologist Email: {radiologist_email}
