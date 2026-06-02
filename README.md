@@ -1,6 +1,6 @@
 # DeepNeuro Backend
 
-Flask REST API for authentication, email verification, password reset, and diagnosis request workflows.
+Flask REST API for authentication, email verification, password reset, diagnosis request workflows, and file/model endpoints.
 
 ## Stack
 
@@ -14,7 +14,7 @@ Flask REST API for authentication, email verification, password reset, and diagn
 ## Project Structure
 
 ```text
-Backend/
+DeepNeuroBack/
 ├── app.py
 ├── config.py
 ├── requirements.txt
@@ -25,8 +25,9 @@ Backend/
 │   └── database.py
 ├── routes/
 │   ├── auth.py
-│   └── diagnosis.py
-│   └── files.py
+│   ├── diagnosis.py
+│   ├── files.py
+│   └── models.py
 └── services/
 │   ├── email_service.py
 │   └── ai_models/
@@ -42,7 +43,7 @@ Backend/
 ## Installation
 
 ```bash
-cd Backend
+cd DeepNeuroBack
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -50,7 +51,7 @@ pip install -r requirements.txt
 
 ## Environment Variables
 
-Create `Backend/.env`:
+Create `DeepNeuroBack/.env`:
 
 ```env
 # Flask
@@ -75,7 +76,7 @@ Notes:
 ## Run the Backend
 
 ```bash
-cd Backend
+cd DeepNeuroBack
 python app.py
 ```
 
@@ -133,6 +134,10 @@ Default server:
 - Uploaded files are written to `uploads/`, and SQLite stores file metadata only.
 - Upload limits default to 25 MB and accept PDFs, images, Office documents, CSV/TXT files, and NIfTI files.
 
+## Request Logs
+
+If you see terminal lines like `"POST /api/auth/login HTTP/1.1" 200 -`, those are Flask/Werkzeug request logs from the development server in `app.py`, not explicit `print()` calls in the route handlers.
+
 ## Quick Test
 
 ```bash
@@ -152,7 +157,7 @@ Expected response includes:
 ## Troubleshooting
 
 - App crashes on startup with email error:
-  - Ensure `.env` exists in `Backend/` and both `EMAIL_SENDER` and `EMAIL_APP_PASSWORD` are set.
+  - Ensure `.env` exists in `DeepNeuroBack/` and both `EMAIL_SENDER` and `EMAIL_APP_PASSWORD` are set.
 - Port 5000 already in use:
   - Stop the conflicting process or run app with a different port in `app.py`.
 - Frontend cannot connect:
