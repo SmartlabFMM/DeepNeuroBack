@@ -597,6 +597,25 @@ class Database:
         except Exception as e:
             print(f"Error updating password: {e}")
             return False
+
+    def update_user_profile(self, email, name):
+        """Update editable user profile fields."""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                'UPDATE users SET name = ? WHERE email = ?',
+                (name.strip(), email.lower())
+            )
+
+            conn.commit()
+            updated = cursor.rowcount > 0
+            conn.close()
+            return updated
+        except Exception as e:
+            print(f"Error updating user profile: {e}")
+            return False
         
         
     def save_diagnosis_request(self, doctor_email, doctor_name, patient_name,

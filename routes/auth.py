@@ -277,6 +277,43 @@ def get_user_profile(email):
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
 
+@auth_bp.route('/profile/<email>', methods=['PUT'])
+def update_user_profile(email):
+    """Update editable profile information."""
+    try:
+        email = email.strip().lower()
+        data = _json_body()
+        name = str(data.get('name', '')).strip()
+
+        if not name:
+            return jsonify({'success': False, 'message': 'Name is required'}), 400
+
+        user = db.get_user_by_email(email)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        if not db.update_user_profile(email, name):
+            return jsonify({'success': False, 'message': 'Failed to update profile'}), 500
+
+        updated_user = db.get_user_by_email(email)
+        return jsonify({
+            'success': True,
+            'message': 'Profile updated successfully',
+            'user': {
+                'name': updated_user.get('name', name),
+                'email': updated_user.get('email', email),
+                'medical_id': updated_user.get('medical_id', ''),
+                'user_type': updated_user.get('user_type', ''),
+                'created_at': updated_user.get('created_at', ''),
+                'last_login': updated_user.get('last_login', ''),
+                'email_verified': updated_user.get('email_verified', 0)
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
+
+
 @auth_bp.route('/settings/<email>', methods=['GET'])
 def get_user_settings(email):
     """Get user settings"""
