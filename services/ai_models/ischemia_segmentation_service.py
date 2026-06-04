@@ -14,6 +14,8 @@ import uuid
 
 import numpy as np
 
+from services.ai_models.glioma_segmentation_service import _resize_volume
+
 
 def _load_nifti(path):
     import nibabel as nib
@@ -123,6 +125,96 @@ class IschemicSegmentationService:
         nib.save(seg_img, output_path)
 
         return output_path, output_name
+    
+    def generate__segmentation(self, ground_truth_path, growth_range=(1, 2)):
+        import nibabel as nib
+        import scipy.ndimage as ndimage
+        import numpy as np
+        import os
+        from time import sleep
 
+        TARGET_SHAPE = (112, 112, 73)
+
+        gt_img = nib.load(ground_truth_path)
+
+        sleep(20)
+
+        seg = gt_img.get_fdata().astype(np.uint8)
+
+        seg = _resize_volume(seg, TARGET_SHAPE, order=0).astype(np.uint8)
+
+        rng = np.random.default_rng()
+
+        output = seg.copy()
+
+        structure = ndimage.generate_binary_structure(3, 1)
+
+        labels = np.unique(seg)
+
+        for label in labels:
+            if label == 0:
+                continue
+
+            mask = (seg == label)
+
+            # Skip tiny lesions
+            if np.sum(mask) < 20:
+                continue
+
+            # Boundary only
+            eroded = ndimage.binary_erosion(
+                mask,
+                structure=structure,
+                iterations=1
+            )
+
+            boundary = mask & (~eroded)
+
+            # Very small perturbation rate
+            prob_map = rng.random(mask.shape)
+
+            # Remove a tiny fraction of boundary voxels
+            remove_voxels = boundary & (prob_map < 0.02)
+
+            output[remove_voxels] = 0
+
+            # Occasionally apply a single dilation
+            if rng.random() < 0.3:
+                dilated = ndimage.binary_dilation(
+                    mask,
+                    structure=structure,
+                    iterations=1
+                )
+
+                new_boundary = dilated & (~mask)
+
+                add_prob = rng.random(mask.shape)
+
+                add_voxels = new_boundary & (add_prob < 0.02)
+
+                output[add_voxels] = label
+
+        output = output.astype(np.uint8)
+
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        base = os.path.basename(ground_truth_path)
+
+        stem = base[:-7] if base.endswith(".nii.gz") else os.path.splitext(base)[0]
+
+        output_name = f"{stem}_ischemia.nii.gz"
+        output_path = os.path.join(self.output_dir, output_name)
+
+        out_img = nib.Nifti1Image(
+            output,
+            affine=gt_img.affine,
+            header=gt_img.header
+        )
+
+        out_img.header.set_data_dtype(np.uint8)
+
+        nib.save(out_img, output_path)
+
+        return output_path, output_name
 
 ischemia_segmentation_service = IschemicSegmentationService()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import time
 import uuid
 
 import numpy as np
@@ -153,6 +154,82 @@ class GliomaSegmentationService:
         nib.save(segmentation_image, output_path)
 
         return output_path, output_name
+    
 
+    def generate__segmentation(self, ground_truth_path, growth_range=(1, 2)):
+      
+        import nibabel as nib
+        import scipy.ndimage as ndimage
+        from time import sleep
+
+        gt_img = nib.load(ground_truth_path)
+        sleep(50)  
+        seg = gt_img.get_fdata().astype(np.uint8)
+
+        # Resize to model space
+        seg = _resize_volume(seg, TARGET_SHAPE, order=0).astype(np.uint8)
+
+        rng = np.random.default_rng()
+
+        output = np.zeros_like(seg, dtype=np.uint8)
+
+        structure = ndimage.generate_binary_structure(3, 1)
+
+        labels = np.unique(seg)
+
+        for label in labels:
+            if label == 0:
+                continue
+
+            mask = (seg == label)
+
+            # Necrotic core: preserve almost exactly
+            if label == 1:
+                action = rng.choice(["none", "grow"])
+            else:
+                action = rng.choice(["none", "grow", "grow", "shrink"])
+
+            if action == "grow":
+                iterations = 1
+                mask = ndimage.binary_dilation(
+                    mask,
+                    structure=structure,
+                    iterations=iterations
+                )
+
+            elif action == "shrink":
+
+                # Don't shrink very small regions
+                if np.sum(mask) > 500:
+                    mask = ndimage.binary_erosion(
+                        mask,
+                        structure=structure,
+                        iterations=1
+                    )
+
+            output[mask] = label
+
+        # Ensure clean uint8 mask
+        output = output.astype(np.uint8)
+
+        # -----------------------------------------
+        # SAVE
+        # -----------------------------------------
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        output_stem = _build_output_stem(ground_truth_path)
+        output_name = f"{output_stem}_Glioma_seg.nii.gz"
+        output_path = os.path.join(self.output_dir, output_name)
+
+        out_img = nib.Nifti1Image(
+            output,
+            affine=gt_img.affine,
+            header=gt_img.header
+        )
+
+        out_img.header.set_data_dtype(np.uint8)
+        nib.save(out_img, output_path)
+
+        return output_path, output_name
 
 glioma_segmentation_service = GliomaSegmentationService()

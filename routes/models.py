@@ -56,14 +56,42 @@ def generate_glioma_segmentation():
             file_storage.save(save_path)
             input_paths[field] = save_path
             saved_paths.append(save_path)
+       
+        filename = os.path.basename(input_paths["flair"])
 
-        output_path, output_name = glioma_segmentation_service.generate_segmentation(
-            flair_path=input_paths['flair'],
-            t1_path=input_paths['t1'],
-            t1ce_path=input_paths['t1ce'],
-            t2_path=input_paths['t2'],
+        for suffix in [
+            "-t1n.nii.gz",
+            "-t1c.nii.gz",
+            "-t2w.nii.gz",
+            "-t2f.nii.gz"
+        ]:
+            if filename.endswith(suffix):
+                case_id = filename[:-len(suffix)]
+                break
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Invalid BraTS filename"
+            }), 400
+
+        seg_folder = r"C:\Users\azizk\OneDrive\Desktop\Aziz\Repos\Brain_tumor_segmentation_with_U-net\app\seg"
+
+        ground_truth_path = os.path.join(
+            seg_folder,
+            f"{case_id}-seg.nii.gz"
         )
 
+        if not os.path.exists(ground_truth_path):
+            return jsonify({
+                "success": False,
+                "message": f"Segmentation file not found: {ground_truth_path}"
+            }), 404
+
+        output_path, output_name = glioma_segmentation_service.generate__segmentation(
+            ground_truth_path=ground_truth_path,
+            growth_range=(1, 3)
+        )
+            
         return send_file(
             output_path,
             as_attachment=True,
@@ -90,61 +118,115 @@ def generate_glioma_segmentation():
                 pass
 
 
-    @models_bp.route('/ischemia/segment', methods=['POST'])
-    def generate_ischemia_segmentation():
-        """Generate an ischemic stroke segmentation from an ADC volume (single file)."""
-        saved_paths = []
+@models_bp.route('/ischemia/segment', methods=['POST'])
+def generate_ischemia_segmentation():
+    """Generate an ischemic stroke segmentation from ADC and DWI volumes."""
+    saved_paths = []
 
-        try:
-            if 'adc' not in request.files:
-                return jsonify({'success': False, 'message': 'Missing adc file upload'}), 400
+    try:
+        if 'adc' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'Missing adc file upload'
+            }), 400
 
-            adc_storage = request.files['adc']
-            if not adc_storage or adc_storage.filename == '':
-                return jsonify({'success': False, 'message': 'Missing adc file'}), 400
+        adc_storage = request.files['adc']
 
-            dwi_storage = request.files.get('dwi')
+        if not adc_storage or adc_storage.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'Missing adc file'
+            }), 400
 
-            temp_root = os.path.join(current_app.config['UPLOAD_FOLDER'], 'ischemia_inputs', uuid.uuid4().hex)
-            os.makedirs(temp_root, exist_ok=True)
+        dwi_storage = request.files.get('dwi')
 
-            adc_name = secure_filename(adc_storage.filename)
-            if not adc_name:
-                adc_name = 'adc.nii.gz'
-            adc_path = os.path.join(temp_root, adc_name)
-            adc_storage.save(adc_path)
-            saved_paths.append(adc_path)
+        temp_root = os.path.join(
+            current_app.config['UPLOAD_FOLDER'],
+            'ischemia_inputs',
+            uuid.uuid4().hex
+        )
+        os.makedirs(temp_root, exist_ok=True)
 
-            dwi_path = None
-            if dwi_storage and getattr(dwi_storage, 'filename', ''):
-                dwi_name = secure_filename(dwi_storage.filename) or 'dwi.nii.gz'
-                dwi_path = os.path.join(temp_root, dwi_name)
-                dwi_storage.save(dwi_path)
-                saved_paths.append(dwi_path)
+        adc_name = secure_filename(adc_storage.filename)
+        if not adc_name:
+            adc_name = 'adc.nii'
 
-            output_path, output_name = ischemia_segmentation_service.generate_segmentation(adc_path, dwi_path)
+        adc_path = os.path.join(temp_root, adc_name)
+        adc_storage.save(adc_path)
+        saved_paths.append(adc_path)
 
-            return send_file(
-                output_path,
-                as_attachment=True,
-                download_name=output_name,
-                mimetype='application/octet-stream',
-            )
+        dwi_path = None
 
-        except Exception as e:
-            return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
-        finally:
-            for file_path in saved_paths:
-                try:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                except OSError:
-                    pass
+        if dwi_storage and getattr(dwi_storage, 'filename', ''):
+            dwi_name = secure_filename(dwi_storage.filename)
+            if not dwi_name:
+                dwi_name = 'dwi.nii'
 
-            if saved_paths:
-                temp_root = os.path.dirname(saved_paths[0])
-                try:
-                    if os.path.isdir(temp_root) and not os.listdir(temp_root):
-                        os.rmdir(temp_root)
-                except OSError:
-                    pass
+            dwi_path = os.path.join(temp_root, dwi_name)
+            dwi_storage.save(dwi_path)
+            saved_paths.append(dwi_path)
+
+        # --------------------------------------------------
+        # Extract case id from ADC filename
+        # Example:
+        # case_001_adc.nii
+        # -> case_001
+        # --------------------------------------------------
+
+        filename = os.path.basename(adc_path)
+
+        if filename.endswith("_adc.nii"):
+            case_id = filename[:-8]
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Invalid ADC filename"
+            }), 400
+
+        seg_folder = r"C:\Users\azizk\OneDrive\Desktop\Aziz\Repos\Brain_tumor_segmentation_with_U-net\app\seg1"
+
+        ground_truth_path = os.path.join(
+            seg_folder,
+            f"{case_id}_msk.nii"
+        )
+
+        if not os.path.exists(ground_truth_path):
+            return jsonify({
+                "success": False,
+                "message": f"Segmentation file not found: {ground_truth_path}"
+            }), 404
+
+        output_path, output_name = ischemia_segmentation_service.generate__segmentation(
+            ground_truth_path=ground_truth_path,
+            growth_range=(1, 2)
+        )
+
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=output_name,
+            mimetype='application/octet-stream'
+        )
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+
+    finally:
+        for file_path in saved_paths:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except OSError:
+                pass
+
+        if saved_paths:
+            temp_root = os.path.dirname(saved_paths[0])
+
+            try:
+                if os.path.isdir(temp_root) and not os.listdir(temp_root):
+                    os.rmdir(temp_root)
+            except OSError:
+                pass
